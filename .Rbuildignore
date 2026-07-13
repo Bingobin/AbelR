@@ -1,0 +1,10 @@
+^lyb_function_local\.R$
+^lyb_function_pi\.R$
+^tools$
+^\.git$
+^\.agents$
+^\.codex$
+^.*\.Rproj$
+^\.Rproj\.user$
+^AbelR_[0-9.]+\.tar\.gz$
+^AbelR\.Rcheck$
