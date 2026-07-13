@@ -13,32 +13,14 @@ DESeq2_DEG_analysis_batch <- function(
   tr_name = NULL,
   ctr_name = NULL,
   species = c("human", "mouse"),
-  group_col = "Group",
-  library_col = "Library",
-  batch_col = "Batch",
-  gene_anno_file = NULL,
-  gene_id_col = "GID"
+  gene_anno_file = NULL
 ) {
-  species <- tolower(species[1])
-  species <- switch(
-    species,
-    hsa = "human",
-    "homo sapiens" = "human",
-    mmu = "mouse",
-    "mus musculus" = "mouse",
-    species
-  )
-  species <- match.arg(species, c("human", "mouse"))
+  species <- .abel_normalize_species(species)
   organism <- if (species == "human") "hsa" else "mmu"
-  option_name <- paste0("AbelR.", species, "_gene_anno_file")
-  if (is.null(gene_anno_file)) {
-    gene_anno_file <- getOption(option_name)
-  }
-  if (is.null(gene_anno_file) || !file.exists(gene_anno_file)) {
-    stop(
-      "A valid gene annotation file is required. Supply gene_anno_file or set ",
-      "options(", option_name, " = '/path/to/gene_annotation.txt')."
-    )
+  stopifnot(all(c("Group", "Batch", "Library") %in% colnames(design.df)))
+  stopifnot("GID" %in% colnames(count.matrix))
+  if (!is.null(tpm.matrix)) {
+    stopifnot("GID" %in% colnames(tpm.matrix))
   }
 
   if (xor(is.null(tr_filter), is.null(ctr_filter))) {
@@ -48,17 +30,11 @@ DESeq2_DEG_analysis_batch <- function(
     if (is.null(tr) || is.null(ctr)) {
       stop("tr and ctr are required when custom filters are not supplied.")
     }
-    tr_filter <- stats::setNames(list(tr), group_col)
-    ctr_filter <- stats::setNames(list(ctr), group_col)
-
-    if (!is.null(library)) {
-      tr_filter[[library_col]] <- library
-      ctr_filter[[library_col]] <- library
+    if (is.null(library) || is.null(batch)) {
+      stop("library and batch are required when custom filters are not supplied.")
     }
-    if (!is.null(batch)) {
-      tr_filter[[batch_col]] <- batch
-      ctr_filter[[batch_col]] <- batch
-    }
+    tr_filter <- list(Library = library, Batch = batch, Group = tr)
+    ctr_filter <- list(Library = library, Batch = batch, Group = ctr)
   }
 
   filter_columns <- unique(c(names(tr_filter), names(ctr_filter)))
@@ -115,55 +91,12 @@ DESeq2_DEG_analysis_batch <- function(
   )
   design$SampleID <- rownames(design)
 
-  prepare_expression_matrix <- function(expression_matrix, sample_ids, label) {
-    if (!is.matrix(expression_matrix) && !is.data.frame(expression_matrix)) {
-      stop(label, " must be a matrix or data.frame.")
-    }
-    missing_samples <- setdiff(sample_ids, colnames(expression_matrix))
-    if (length(missing_samples) > 0) {
-      stop(
-        label,
-        " is missing samples selected from design.df: ",
-        paste(missing_samples, collapse = ", ")
-      )
-    }
-
-    if (!is.null(gene_id_col) && gene_id_col %in% colnames(expression_matrix)) {
-      gene_ids <- as.character(expression_matrix[[gene_id_col]])
-    } else {
-      gene_ids <- rownames(expression_matrix)
-    }
-    if (is.null(gene_ids) || any(is.na(gene_ids) | gene_ids == "")) {
-      stop(
-        label,
-        " requires gene IDs in rownames or in the gene_id_col column."
-      )
-    }
-    if (anyDuplicated(gene_ids)) {
-      stop(label, " contains duplicated gene IDs.")
-    }
-
-    output <- as.matrix(expression_matrix[, sample_ids, drop = FALSE])
-    suppressWarnings(storage.mode(output) <- "numeric")
-    if (anyNA(output)) {
-      stop(label, " contains missing or non-numeric values.")
-    }
-    rownames(output) <- gene_ids
-    output
-  }
-
-  counts <- prepare_expression_matrix(
-    count.matrix,
-    rownames(design),
-    "count.matrix"
-  )
+  counts <- as.matrix(count.matrix[, rownames(design), drop = FALSE])
+  rownames(counts) <- count.matrix$GID
   tpm.mat <- NULL
   if (!is.null(tpm.matrix)) {
-    tpm.mat <- prepare_expression_matrix(
-      tpm.matrix,
-      rownames(design),
-      "tpm.matrix"
-    )
+    tpm.mat <- as.matrix(tpm.matrix[, rownames(design), drop = FALSE])
+    rownames(tpm.mat) <- tpm.matrix$GID
   }
 
   dds <- DESeqDataSetFromMatrix(
@@ -178,22 +111,7 @@ DESeq2_DEG_analysis_batch <- function(
   DESeq2::plotMA(resOrdered, alpha = 0.05)
   deseq2_result <- data.frame(resOrdered)
 
-  gene_id_anno <- utils::read.table(
-    gene_anno_file,
-    header = TRUE,
-    sep = "\t",
-    stringsAsFactors = FALSE,
-    check.names = FALSE,
-    row.names = 1
-  )
-  if (species == "human") {
-    gene_id_anno <- gene_id_anno[
-      !grepl("_PAR_", rownames(gene_id_anno)),
-      ,
-      drop = FALSE
-    ]
-  }
-  rownames(gene_id_anno) <- sub("\\..*$", "", rownames(gene_id_anno))
+  gene_id_anno <- .abel_gene_annotation(species, gene_anno_file)
 
   deseq2_result <- merge(
     gene_id_anno,
@@ -251,75 +169,21 @@ DESeq2_DEG_analysis <- function(
   tpm.matrix = NULL,
   design.df,
   tr,
-  ctr
+  ctr,
+  species = c("human", "mouse"),
+  gene_anno_file = NULL
 ) {
-  #SampleID Group
-
-  stopifnot(all(c("Group") %in% colnames(design.df)))
-
-  design <- design.df |> filter(Group %in% c(ctr, tr))
-  design$Group <- factor(design$Group, levels = c(ctr, tr))
-  design$SampleID <- rownames(design)
-  counts <- count.matrix[, rownames(design)]
-  rownames(counts) <- count.matrix$GID
-  tpm.mat <- tpm.matrix[, rownames(design)]
-  rownames(tpm.mat) <- tpm.matrix$GID
-
-  dds <- DESeqDataSetFromMatrix(
-    countData = counts,
-    colData = design,
-    design = ~Group
+  DESeq2_DEG_analysis_batch(
+    count.matrix = count.matrix,
+    tpm.matrix = tpm.matrix,
+    design.df = design.df,
+    tr = tr,
+    ctr = ctr,
+    tr_filter = list(Group = tr),
+    ctr_filter = list(Group = ctr),
+    species = species,
+    gene_anno_file = gene_anno_file
   )
-  dds <- DESeq(dds)
-  res <- results(dds, alpha = 0.05)
-  inter <- resultsNames(dds)
-  resOrdered <- res[order(res$padj, na.last = TRUE), ]
-  DESeq2::plotMA(resOrdered, alpha = 0.05)
-  deseq2_result <- data.frame(resOrdered)
-  gene_id_anno <- read.table(
-    "~/Bin/gene_len.v43.new.txt",
-    header = TRUE,
-    sep = "\t",
-    stringsAsFactors = FALSE,
-    row.names = 1
-  )
-  gene_id_anno <- gene_id_anno[!grepl("_PAR_", rownames(gene_id_anno)), ]
-
-  rownames(gene_id_anno) <- sub("\\..*$", "", rownames(gene_id_anno))
-  deseq2_result <- merge(
-    gene_id_anno,
-    deseq2_result,
-    by.x = 0,
-    by.y = 0,
-    all = F
-  )
-  deseq2_result <- merge(deseq2_result, tpm.mat, by.x = 1, by.y = 0)
-
-  if (is.data.frame(tpm.matrix)) {
-    ctr.samples <- rownames(design[design$Group == ctr, ])
-    tr.samples <- rownames(design[design$Group == tr, ])
-    deseq2_result$TPM_ctr_mean <- round(
-      apply(deseq2_result[, ctr.samples], 1, mean),
-      digits = 3
-    )
-    deseq2_result$TPM_tr_mean <- round(
-      apply(deseq2_result[, tr.samples], 1, mean),
-      digits = 3
-    )
-  }
-  deseq2_result$Entrez <- TransGeneID(
-    deseq2_result$Symbol,
-    "Symbol",
-    "Entrez",
-    organism = "hsa"
-  )
-  vsd <- varianceStabilizingTransformation(dds, blind = FALSE)
-  result <- list()
-  result[["inter"]] <- inter
-  result[["result"]] <- deseq2_result
-  result[["vsd"]] <- vsd
-  result[["design"]] <- design
-  return(result)
 }
 
 

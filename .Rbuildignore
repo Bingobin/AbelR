@@ -1,5 +1,4 @@
-^lyb_function_local\.R$
-^lyb_function_pi\.R$
+^legacy$
 ^tools$
 ^\.git$
 ^\.agents$

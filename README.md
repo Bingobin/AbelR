@@ -3,11 +3,6 @@
 Personal R framework for bioinformatics analysis, statistical modeling and
 scientific visualization.
 
-The package source is organized by analysis domain under `R/`. The original
-`lyb_function_local.R` and `lyb_function_pi.R` files are retained only as
-legacy snapshots and are excluded from package builds. New and updated
-functions should be maintained in `R/`.
-
 ## Development
 
 Load the package directly from the repository during development:
@@ -53,8 +48,8 @@ Source: `R/deseq2.R`
 
 | Function | Description |
 |---|---|
-| `DESeq2_DEG_analysis()` | Run a two-group DESeq2 analysis and return the annotated result, VST object, and sample design. |
-| `DESeq2_DEG_analysis_batch()` | Run human or mouse DESeq2 analysis using configurable group, library, batch, or custom sample filters. |
+| `DESeq2_DEG_analysis()` | Run a two-group human or mouse DESeq2 analysis using the shared species-aware implementation. |
+| `DESeq2_DEG_analysis_batch()` | Run human or mouse DESeq2 analysis using the same `Group/Batch/Library` design and `GID` matrix format. |
 | `DESeq2_DEG_extract()` | Extract significantly upregulated and downregulated genes and optionally draw a heatmap. |
 | `Compare_pairwise_Deseq2()` | Compare fold changes from two DESeq2 result tables and highlight shared directional changes. |
 
@@ -164,7 +159,7 @@ package:
 | Mouse enrichment analysis | `org.Mm.eg.db` and the corresponding mouse genome resources |
 | scTYPE annotation | scTYPE scripts and the scTYPE marker database |
 | Genome-track visualization | `trackViewer`, genome annotations, and compatible BAM or BigWig files |
-| DEG annotation and Manhattan plots | A compatible gene-annotation table |
+| DEG annotation and Manhattan plots | Bundled compressed gene-annotation tables, or a compatible user-supplied table |
 
 Several legacy functions still contain environment-specific file paths. Until
 those paths are converted into explicit arguments or AbelR options, verify the
@@ -173,19 +168,42 @@ server.
 
 ## Human and mouse DESeq2 configuration
 
-`DESeq2_DEG_analysis_batch()` supports both human and mouse RNA-seq. Annotation
-paths are supplied explicitly or configured once per R session; the function
-does not contain a fixed annotation path.
+`DESeq2_DEG_analysis_batch()` and `DESeq2_DEG_analysis()` support both human and
+mouse RNA-seq. AbelR includes compressed annotation tables for both species and
+uses them automatically:
 
 ```r
-options(
-  AbelR.human_gene_anno_file = "~/database/GENCODE/gene_len.v43.new.txt",
-  AbelR.mouse_gene_anno_file = "~/database/GRCm39/gene_len.vM38.txt"
+system.file(
+  "extdata",
+  "gene_len.v43.new.txt.gz",
+  package = "AbelR"
+)
+
+system.file(
+  "extdata",
+  "gene_len.vM38.txt.gz",
+  package = "AbelR"
 )
 ```
 
-The original human design using `Group`, `Library`, and `Batch` remains
-supported:
+Both plain `.txt` files and gzip-compressed `.txt.gz` files are supported. To
+override the bundled annotations, supply `gene_anno_file` directly or configure
+a path once per R session:
+
+```r
+options(
+  AbelR.human_gene_anno_file = "/custom/path/gene_len.v43.new.txt.gz",
+  AbelR.mouse_gene_anno_file = "/custom/path/gene_len.vM38.txt.gz"
+)
+```
+
+Human and mouse analyses use exactly the same input format:
+
+- `design.df` must contain `Group`, `Batch`, and `Library` columns.
+- `count.matrix` must contain a `GID` column.
+- `tpm.matrix`, when supplied, must also contain a `GID` column.
+
+Human example:
 
 ```r
 human_deg <- DESeq2_DEG_analysis_batch(
@@ -200,22 +218,23 @@ human_deg <- DESeq2_DEG_analysis_batch(
 )
 ```
 
-For a mouse design whose group column is named `treatment`, gene IDs can be
-read directly from the matrix row names when a `GID` column is absent:
+Mouse uses the same columns and arguments; only `species` and the biological
+group names change:
 
 ```r
 mouse_deg <- DESeq2_DEG_analysis_batch(
-  count.matrix = dss_4m.count,
-  tpm.matrix = dss_4m.tpm,
-  design.df = dss_4m.design.rm,
+  count.matrix = mouse_count,
+  tpm.matrix = mouse_tpm,
+  design.df = mouse_design,
+  library = "RNA-seq",
+  batch = "Batch1",
   tr = "DSS",
   ctr = "BLANK",
-  species = "mouse",
-  group_col = "treatment"
+  species = "mouse"
 )
 ```
 
 Alternatively, `tr_filter` and `ctr_filter` can be named lists containing any
-columns in `design.df`. The annotation table must use gene IDs in its first
-column; a `Symbol` column is recommended so that AbelR can add Entrez IDs using
-the selected species.
+columns in `design.df`, while the required standard columns remain present. The
+annotation table must use gene IDs in its first column; a `Symbol` column is
+recommended so that AbelR can add Entrez IDs using the selected species.
