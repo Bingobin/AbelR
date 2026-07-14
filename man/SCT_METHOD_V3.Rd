@@ -6,6 +6,7 @@
 \usage{
 SCT_METHOD_V3(
   seu,
+  sample_col = "SampleID",
   var_features_n = 3000,
   sct_method = "glmGamPoi",
   npcs = 30,
@@ -22,7 +23,9 @@ SCT_METHOD_V3(
 )
 }
 \arguments{
-\item{seu}{A Seurat object containing a \code{SampleID} metadata column.}
+\item{seu}{A Seurat object containing a sample-identity metadata column.}
+
+\item{sample_col}{Metadata column used to split RNA layers by sample.}
 
 \item{var_features_n}{Number of variable features retained by SCTransform.}
 
@@ -46,7 +49,7 @@ and UMAP. \code{max(dims)} must not exceed \code{npcs}.}
 \item{umap_spread}{UMAP spread parameter.}
 
 \item{join_layers}{Logical; join existing RNA layers before splitting them by
-\code{SampleID}.}
+\code{sample_col}.}
 
 \item{maxSize_GB}{Maximum future global size in gigabytes.}
 

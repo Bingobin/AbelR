@@ -33,8 +33,8 @@ library(AbelR)
 ```
 
 The current modules cover DESeq2, DEG visualization, survival analysis,
-enrichment analysis, correlation analysis, ChIP-seq, scRNA-seq, Monocle3, and
-CellChat workflows.
+enrichment analysis, correlation analysis, ChIP-seq, scRNA-seq, CytoTRACE2,
+Monocle3, and CellChat workflows.
 
 ## Quick start
 
@@ -51,7 +51,7 @@ corresponding unified function.
 
 ## Function index
 
-AbelR currently contains 38 functions organized into nine analysis modules.
+AbelR currently contains 40 functions organized into nine analysis modules.
 The tables provide a short overview; detailed parameter, input, and return-value
 documentation should be maintained in the function-level roxygen2 comments.
 
@@ -137,7 +137,9 @@ Source: `R/scrna.R`
 | Function | Description |
 |---|---|
 | `scRNA_SCT_norm()` | Integrate a list of Seurat objects using the SCT workflow, followed by PCA, UMAP, and clustering. |
-| `SCT_METHOD_V3()` | Run a Seurat v5 SCT and RPCA integration workflow with configurable graph and UMAP parameters. |
+| `filter_seurat_qc()` | Filter a Seurat object using configurable feature, count, mitochondrial-content, and doublet thresholds. |
+| `SCT_METHOD_V3()` | Run a Seurat v5 SCT and RPCA integration workflow after splitting RNA layers by a configurable sample column. |
+| `run_cytotrace2_by_sample()` | Run CytoTRACE2 independently for each sample and combine the resulting cell-level metadata. |
 | `scTYPE_annotation()` | Annotate Seurat clusters using an explicit scTYPE directory or `AbelR.sctype_dir` option. |
 
 ### Trajectory analysis
@@ -163,6 +165,8 @@ package:
 
 | Feature | Additional requirement |
 |---|---|
+| SCT integration with `sct_method = "glmGamPoi"` | `glmGamPoi` |
+| CytoTRACE2 analysis | `CytoTRACE2` |
 | Monocle3 trajectory analysis | `monocle3` and `SingleCellExperiment` |
 | CellChat analysis | `CellChat` and `future` |
 | Mouse enrichment analysis | `org.Mm.eg.db` and the corresponding mouse genome resources |
@@ -173,6 +177,46 @@ package:
 
 Environment-specific resources are supplied through function arguments or
 AbelR options rather than fixed paths in active package code.
+
+## Long-running jobs on a server
+
+The two command-line entry points under `inst/scripts/` call the same exported
+AbelR functions used in an interactive R session. After installing AbelR on the
+server, locate the installed scripts with:
+
+```r
+system.file("scripts", "run_sct_integrate.R", package = "AbelR")
+system.file("scripts", "run_cytotrace2_by_sample.R", package = "AbelR")
+```
+
+For example, run SCT/RPCA integration from the shell with:
+
+```bash
+SCT_SCRIPT=$(Rscript -e 'cat(system.file("scripts", "run_sct_integrate.R", package = "AbelR"))')
+Rscript "$SCT_SCRIPT" \
+  --input_seurat input.seurat.rds \
+  --out_seurat output.sct.rds \
+  --sample_col SampleID \
+  --maxSize_GB 120 \
+  --workers 1
+```
+
+Run CytoTRACE2 separately by sample with:
+
+```bash
+CYTOTRACE_SCRIPT=$(Rscript -e 'cat(system.file("scripts", "run_cytotrace2_by_sample.R", package = "AbelR"))')
+Rscript "$CYTOTRACE_SCRIPT" \
+  --input_seurat output.sct.rds \
+  --out_rds output.CytoTRACE2.metadata.rds \
+  --sample_col SampleID \
+  --species human \
+  --ncores 4
+```
+
+Use `Rscript "$SCT_SCRIPT" --help` or
+`Rscript "$CYTOTRACE_SCRIPT" --help` to list all thresholds and optional
+arguments. By default, the CytoTRACE2 runner saves only combined metadata to
+avoid retaining every large per-sample Seurat result in memory.
 
 ## Human and mouse DESeq2 configuration
 

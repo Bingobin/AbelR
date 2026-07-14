@@ -41,13 +41,88 @@ scRNA_SCT_norm <- function(object_list) {
 }
 
 
+#' Filter a Seurat object using common RNA quality-control metrics
+#'
+#' Retains cells within configurable feature, count, and mitochondrial-content
+#' thresholds and optionally restricts a doublet-classification column to one
+#' requested value.
+#'
+#' @param seu A Seurat object containing RNA quality-control metadata.
+#' @param min_nFeature_RNA,max_nFeature_RNA Exclusive lower and upper bounds for
+#'   detected RNA features.
+#' @param max_percent_mt Exclusive upper bound for mitochondrial percentage.
+#' @param min_nCount_RNA,max_nCount_RNA Exclusive lower and upper RNA-count
+#'   bounds.
+#' @param doublet_col Metadata column containing doublet classifications.
+#' @param doublet_keep Value retained from `doublet_col`.
+#' @param use_doublet_filter Logical; apply the doublet classification filter.
+#' @param verbose Logical; report cell counts before and after filtering.
+#'
+#' @return A Seurat object containing only cells that pass all enabled filters.
+#' @export
+filter_seurat_qc <- function(
+  seu,
+  min_nFeature_RNA = 300,
+  max_nFeature_RNA = 9000,
+  max_percent_mt = 12.5,
+  min_nCount_RNA = 800,
+  max_nCount_RNA = 60000,
+  doublet_col = "scDblFinder.class",
+  doublet_keep = "singlet",
+  use_doublet_filter = TRUE,
+  verbose = TRUE
+) {
+  if (!inherits(seu, "Seurat")) {
+    stop("seu must be a Seurat object.")
+  }
+  required_cols <- c("nFeature_RNA", "nCount_RNA", "percent.mt")
+  missing_cols <- setdiff(required_cols, colnames(seu@meta.data))
+  if (length(missing_cols)) {
+    stop(
+      "Missing required metadata columns: ",
+      paste(missing_cols, collapse = ", ")
+    )
+  }
+  if (isTRUE(use_doublet_filter) && !doublet_col %in% colnames(seu@meta.data)) {
+    stop("Doublet metadata column not found: ", doublet_col)
+  }
+
+  meta <- seu@meta.data
+  keep <- meta$nFeature_RNA > min_nFeature_RNA &
+    meta$nFeature_RNA < max_nFeature_RNA &
+    meta$percent.mt < max_percent_mt &
+    meta$nCount_RNA > min_nCount_RNA &
+    meta$nCount_RNA < max_nCount_RNA
+  keep[is.na(keep)] <- FALSE
+  if (isTRUE(use_doublet_filter)) {
+    keep <- keep & !is.na(meta[[doublet_col]]) &
+      meta[[doublet_col]] == doublet_keep
+  }
+  cells_keep <- rownames(meta)[keep]
+  if (!length(cells_keep)) {
+    stop("No cells retained after QC filtering.")
+  }
+  if (verbose) {
+    message(
+      "Seurat QC retained ",
+      length(cells_keep),
+      " of ",
+      ncol(seu),
+      " cells."
+    )
+  }
+  subset(seu, cells = cells_keep)
+}
+
+
 #' Run Seurat v5 SCT and RPCA integration
 #'
 #' Normalizes a layered Seurat object with SCTransform, performs PCA and RPCA
 #' layer integration, constructs a shared-nearest-neighbour graph, clusters the
 #' cells, and calculates a UMAP embedding.
 #'
-#' @param seu A Seurat object containing a `SampleID` metadata column.
+#' @param seu A Seurat object containing a sample-identity metadata column.
+#' @param sample_col Metadata column used to split RNA layers by sample.
 #' @param var_features_n Number of variable features retained by SCTransform.
 #' @param sct_method SCTransform fitting method, such as `"glmGamPoi"`.
 #' @param npcs Number of principal components to calculate.
@@ -60,7 +135,7 @@ scRNA_SCT_norm <- function(object_list) {
 #' @param umap_min_dist Minimum UMAP distance.
 #' @param umap_spread UMAP spread parameter.
 #' @param join_layers Logical; join existing RNA layers before splitting them by
-#'   `SampleID`.
+#'   `sample_col`.
 #' @param maxSize_GB Maximum future global size in gigabytes.
 #' @param verbose Logical; show progress from Seurat functions.
 #'
@@ -69,6 +144,7 @@ scRNA_SCT_norm <- function(object_list) {
 #' @export
 SCT_METHOD_V3 <- function(
     seu,
+    sample_col = "SampleID",
     # SCTransform / PCA
     var_features_n = 3000,
     sct_method = "glmGamPoi",
@@ -97,15 +173,25 @@ SCT_METHOD_V3 <- function(
   if (max(dims) > npcs) {
     stop("max(dims) must be less than or equal to npcs.")
   }
+
+  if (!sample_col %in% colnames(seu@meta.data)) {
+    stop("sample_col not found in metadata: ", sample_col)
+  }
+  if (identical(sct_method, "glmGamPoi") &&
+      !requireNamespace("glmGamPoi", quietly = TRUE)) {
+    stop("Package 'glmGamPoi' is required when sct_method = 'glmGamPoi'.")
+  }
+  sample_values <- factor(seu@meta.data[[sample_col]])
+  if (anyNA(sample_values)) {
+    stop("sample_col contains missing values: ", sample_col)
+  }
+  seu[[sample_col]] <- sample_values
   
-  # ensure SampleID
-  seu$SampleID <- factor(seu$SampleID)
-  
-  # RNA layers: join then split by SampleID
+  # RNA layers: join then split by sample
   if (join_layers) {
     seu[["RNA"]] <- SeuratObject::JoinLayers(seu[["RNA"]])
   }
-  seu[["RNA"]] <- split(seu[["RNA"]], f = seu$SampleID)
+  seu[["RNA"]] <- split(seu[["RNA"]], f = sample_values)
   
   # SCT
   seu <- SCTransform(
