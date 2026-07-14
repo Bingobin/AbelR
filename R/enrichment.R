@@ -21,7 +21,7 @@
 #'   `reactome`, `hallmark`, and `wikipathways`; disabled or empty optional
 #'   analyses are returned as `NULL`.
 #' @export
-enrich_combind_s2 <- function(
+enrich_combind <- function(
   gene,
   pvc = 1,
   qvc = 1,
@@ -272,7 +272,7 @@ enrich_combind_s2 <- function(
 #' Selects rows from GO, WikiPathways, and KEGG enrichment results and combines
 #' them in a faceted significance plot.
 #'
-#' @param enricher Enrichment list returned by [enrich_combind_s2()].
+#' @param enricher Enrichment list returned by [enrich_combind()].
 #' @param bp,cc,mf,wp,kg Integer row indices selected from GO BP, GO CC, GO MF,
 #'   WikiPathways, and KEGG results.
 #' @param value Column index in each enrichment result used as the plotted
@@ -540,19 +540,19 @@ GO_BP_treeplot_DESeq2 <- function(deg.df, label, pv = 0.05, lfc = log2(1.5)) {
   dw.entrez <- unique(na.omit(dw.entrez))
   deg.entrez <- unique(c(up.entrez, dw.entrez))
   color <- "YlGnBu"
-  up.enricher <- enrich_combind_s2(
+  up.enricher <- enrich_combind(
     up.entrez,
     species = "human",
     reactome = FALSE,
     hallmark = FALSE
   )
-  dw.enricher <- enrich_combind_s2(
+  dw.enricher <- enrich_combind(
     dw.entrez,
     species = "human",
     reactome = FALSE,
     hallmark = FALSE
   )
-  deg.enricher <- enrich_combind_s2(
+  deg.enricher <- enrich_combind(
     deg.entrez,
     species = "human",
     reactome = FALSE,
@@ -781,13 +781,13 @@ GO_BP_treeplot_scRNAseq <- function(deg.df, label, pv = 0.05, lfc = 0.25) {
   up.entrez <- unique(na.omit(up.entrez))
   dw.entrez <- unique(na.omit(dw.entrez))
   color <- "YlGnBu"
-  up.enricher <- enrich_combind_s2(
+  up.enricher <- enrich_combind(
     up.entrez,
     species = "human",
     reactome = FALSE,
     hallmark = FALSE
   )
-  dw.enricher <- enrich_combind_s2(
+  dw.enricher <- enrich_combind(
     dw.entrez,
     species = "human",
     reactome = FALSE,

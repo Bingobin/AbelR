@@ -1,46 +1,5 @@
 # Functions for scrna analyses.
 
-#' Integrate Seurat objects with the SCT workflow
-#'
-#' Applies SCTransform to a list of Seurat objects, identifies integration
-#' features and anchors, integrates the data, and runs scaling, PCA, UMAP,
-#' neighbour finding, and clustering.
-#'
-#' @param object_list A list of Seurat objects to integrate.
-#'
-#' @return An integrated Seurat object with PCA, UMAP, neighbour graph, and
-#'   clustering results.
-#' @export
-scRNA_SCT_norm <- function(object_list) {
-  mut.list <- lapply(X = object_list, FUN = SCTransform)
-  features <- SelectIntegrationFeatures(
-    object.list = mut.list,
-    nfeatures = 3000
-  )
-  mut.list <- PrepSCTIntegration(
-    object.list = mut.list,
-    anchor.features = features
-  )
-  mut.anchors <- FindIntegrationAnchors(
-    object.list = mut.list,
-    normalization.method = "SCT",
-    anchor.features = features
-  )
-  combined.sct <- IntegrateData(
-    anchorset = mut.anchors,
-    normalization.method = "SCT"
-  )
-  DefaultAssay(combined.sct) <- "integrated"
-  combined.sct <- ScaleData(combined.sct, verbose = FALSE)
-  combined.sct <- RunPCA(combined.sct, npcs = 50, verbose = FALSE)
-  combined.sct <- RunUMAP(combined.sct, reduction = "pca", dims = 1:40)
-  combined.sct <- FindNeighbors(combined.sct, reduction = "pca", dims = 1:40)
-  #  combined.sct <- FindClusters(combined.sct, resolution = c(0.2,0.5,0.8,1,1.5,2))
-  combined.sct <- FindClusters(combined.sct, resolution = c(0.5, 1))
-  return(combined.sct)
-}
-
-
 #' Filter a Seurat object using common RNA quality-control metrics
 #'
 #' Retains cells within configurable feature, count, and mitochondrial-content
@@ -142,7 +101,7 @@ filter_seurat_qc <- function(
 #' @return The processed Seurat object with an `integrated.dr` reduction,
 #'   clusters, and UMAP coordinates.
 #' @export
-SCT_METHOD_V3 <- function(
+scRNA_SCT_norm <- function(
     seu,
     sample_col = "SampleID",
     # SCTransform / PCA

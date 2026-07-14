@@ -1,4 +1,14 @@
-# AbelR
+```text
+ █████╗ ██████╗ ███████╗██╗     ██████╗
+██╔══██╗██╔══██╗██╔════╝██║     ██╔══██╗
+███████║██████╔╝█████╗  ██║     ██████╔╝
+██╔══██║██╔══██╗██╔══╝  ██║     ██╔══██╗
+██║  ██║██████╔╝███████╗███████╗██║  ██║
+╚═╝  ╚═╝╚═════╝ ╚══════╝╚══════╝╚═╝  ╚═╝
+
+        Bioinformatics analysis, modelling, and visualization
+              (•̀ᴗ•́)و  Ready to explore your data!
+```
 
 Personal R framework for bioinformatics analysis, statistical modeling and
 scientific visualization.
@@ -51,7 +61,7 @@ corresponding unified function.
 
 ## Function index
 
-AbelR currently contains 40 functions organized into nine analysis modules.
+AbelR currently contains 39 functions organized into nine analysis modules.
 The tables provide a short overview; detailed parameter, input, and return-value
 documentation should be maintained in the function-level roxygen2 comments.
 
@@ -97,7 +107,7 @@ Source: `R/enrichment.R`
 
 | Function | Description |
 |---|---|
-| `enrich_combind_s2()` | Unified GO and KEGG analysis with optional Reactome, Hallmark, and WikiPathways results. |
+| `enrich_combind()` | Unified GO and KEGG analysis with optional Reactome, Hallmark, and WikiPathways results. |
 | `enricher_plot()` | Combine selected enrichment categories into a summary visualization. |
 | `gsea_plot_custorm()` | Build a customized GSEA running-score plot for selected terms. |
 | `go_plot_custom()` | Draw a customized GO enrichment plot for selected terms. |
@@ -136,9 +146,8 @@ Source: `R/scrna.R`
 
 | Function | Description |
 |---|---|
-| `scRNA_SCT_norm()` | Integrate a list of Seurat objects using the SCT workflow, followed by PCA, UMAP, and clustering. |
 | `filter_seurat_qc()` | Filter a Seurat object using configurable feature, count, mitochondrial-content, and doublet thresholds. |
-| `SCT_METHOD_V3()` | Run a Seurat v5 SCT and RPCA integration workflow after splitting RNA layers by a configurable sample column. |
+| `scRNA_SCT_norm()` | Run a Seurat v5 SCT and RPCA integration workflow after splitting RNA layers by a configurable sample column. |
 | `run_cytotrace2_by_sample()` | Run CytoTRACE2 independently for each sample and combine the resulting cell-level metadata. |
 | `scTYPE_annotation()` | Annotate Seurat clusters using an explicit scTYPE directory or `AbelR.sctype_dir` option. |
 

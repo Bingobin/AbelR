@@ -135,7 +135,7 @@ main <- function() {
   invisible(gc())
 
   message("Running SCT and RPCA integration with ", workers, " worker(s).")
-  seu <- AbelR::SCT_METHOD_V3(
+  seu <- AbelR::scRNA_SCT_norm(
     seu = seu,
     sample_col = get_arg(args, "sample_col", "SampleID"),
     var_features_n = as.integer(get_arg(args, "var_features_n", "3000")),

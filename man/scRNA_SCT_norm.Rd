@@ -2,19 +2,65 @@
 % Please edit documentation in R/scrna.R
 \name{scRNA_SCT_norm}
 \alias{scRNA_SCT_norm}
-\title{Integrate Seurat objects with the SCT workflow}
+\title{Run Seurat v5 SCT and RPCA integration}
 \usage{
-scRNA_SCT_norm(object_list)
+scRNA_SCT_norm(
+  seu,
+  sample_col = "SampleID",
+  var_features_n = 3000,
+  sct_method = "glmGamPoi",
+  npcs = 30,
+  dims = 1:30,
+  k.anchor = 20,
+  k.weight = 20,
+  resolution = 0.5,
+  umap_n_neighbors = 30,
+  umap_min_dist = 0.3,
+  umap_spread = 1,
+  join_layers = TRUE,
+  maxSize_GB = 35,
+  verbose = FALSE
+)
 }
 \arguments{
-\item{object_list}{A list of Seurat objects to integrate.}
+\item{seu}{A Seurat object containing a sample-identity metadata column.}
+
+\item{sample_col}{Metadata column used to split RNA layers by sample.}
+
+\item{var_features_n}{Number of variable features retained by SCTransform.}
+
+\item{sct_method}{SCTransform fitting method, such as \code{"glmGamPoi"}.}
+
+\item{npcs}{Number of principal components to calculate.}
+
+\item{dims}{Principal-component dimensions used for integration, neighbours,
+and UMAP. \code{max(dims)} must not exceed \code{npcs}.}
+
+\item{k.anchor}{Number of anchors used by RPCA integration.}
+
+\item{k.weight}{Number of neighbours used when weighting anchors.}
+
+\item{resolution}{Clustering resolution.}
+
+\item{umap_n_neighbors}{Number of UMAP neighbours.}
+
+\item{umap_min_dist}{Minimum UMAP distance.}
+
+\item{umap_spread}{UMAP spread parameter.}
+
+\item{join_layers}{Logical; join existing RNA layers before splitting them by
+\code{sample_col}.}
+
+\item{maxSize_GB}{Maximum future global size in gigabytes.}
+
+\item{verbose}{Logical; show progress from Seurat functions.}
 }
 \value{
-An integrated Seurat object with PCA, UMAP, neighbour graph, and
-clustering results.
+The processed Seurat object with an \code{integrated.dr} reduction,
+clusters, and UMAP coordinates.
 }
 \description{
-Applies SCTransform to a list of Seurat objects, identifies integration
-features and anchors, integrates the data, and runs scaling, PCA, UMAP,
-neighbour finding, and clustering.
+Normalizes a layered Seurat object with SCTransform, performs PCA and RPCA
+layer integration, constructs a shared-nearest-neighbour graph, clusters the
+cells, and calculates a UMAP embedding.
 }

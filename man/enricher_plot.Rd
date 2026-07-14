@@ -15,7 +15,7 @@ enricher_plot(
 )
 }
 \arguments{
-\item{enricher}{Enrichment list returned by \code{\link[=enrich_combind_s2]{enrich_combind_s2()}}.}
+\item{enricher}{Enrichment list returned by \code{\link[=enrich_combind]{enrich_combind()}}.}
 
 \item{bp, cc, mf, wp, kg}{Integer row indices selected from GO BP, GO CC, GO MF,
 WikiPathways, and KEGG results.}
