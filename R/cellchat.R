@@ -1,19 +1,20 @@
 # Functions for cellchat analyses.
 
 Build_CellChat_object <- function(
-    seu,
-    species = c("human", "mouse"),
-    group.by = "CellType",
-    sample.by = "SampleID",
-    cluster.by = NULL,
-    assay = "RNA",
-    layer = "data",
-    min.cells = 10,
-    workers = 4,
-    maxSize = 40 * 1024^3,
-    type = "triMean",
-    use_parallel = TRUE,
-    verbose = TRUE
+  seu,
+  species = c("human", "mouse"),
+  group.by = "CellType",
+  sample.by = "SampleID",
+  cluster.by = NULL,
+  assay = "RNA",
+  layer = "data",
+  min.cells = 10,
+  workers_overexpress = 6,
+  workers_prob = 2,
+  maxSize = 40 * 1024^3,
+  type = "triMean",
+  use_parallel = TRUE,
+  verbose = TRUE
 ) {
   species <- match.arg(species)
   for (pkg in c("Seurat", "CellChat", "future")) {
@@ -30,7 +31,7 @@ Build_CellChat_object <- function(
   if (!is.null(cluster.by) && !cluster.by %in% colnames(seu@meta.data)) {
     stop("cluster.by column not found in seu@meta.data: ", cluster.by)
   }
-  data.input <- Seurat::GetAssayData(
+  data.input <- GetAssayData(
     seu,
     assay = assay,
     layer = layer
@@ -52,43 +53,76 @@ Build_CellChat_object <- function(
     message("Number of groups: ", length(unique(meta$labels)))
     print(table(meta$labels))
   }
-  cellchat <- CellChat::createCellChat(
+  cellchat <- createCellChat(
     object = data.input,
     meta = meta,
     group.by = "labels"
   )
   if (species == "human") {
-    cellchat@DB <- getExportedValue("CellChat", "CellChatDB.human")
+    cellchat@DB <- CellChatDB.human
   } else {
-    cellchat@DB <- getExportedValue("CellChat", "CellChatDB.mouse")
+    cellchat@DB <- CellChatDB.mouse
   }
-  cellchat <- CellChat::subsetData(cellchat)
-  old_max_size <- getOption("future.globals.maxSize")
-  old_plan <- future::plan()
-  on.exit(options(future.globals.maxSize = old_max_size), add = TRUE)
-  on.exit(future::plan(old_plan), add = TRUE)
+  message("1. subsetData")
+  print(system.time({
+    cellchat <- subsetData(cellchat)
+  }))
+
+  options(future.globals.maxSize = maxSize)
   if (use_parallel) {
-    options(future.globals.maxSize = maxSize)
-    future::plan(future::multisession, workers = workers)
+    future::plan(future::multisession, workers = workers_overexpress)
   } else {
     future::plan(future::sequential)
   }
-  cellchat <- CellChat::identifyOverExpressedGenes(cellchat)
-  cellchat <- CellChat::identifyOverExpressedInteractions(cellchat)
-  cellchat <- CellChat::computeCommunProb(
-    cellchat,
-    type = type
-  )
-  cellchat <- CellChat::filterCommunication(
-    cellchat,
-    min.cells = min.cells
-  )
-  cellchat <- CellChat::computeCommunProbPathway(cellchat)
-  cellchat <- CellChat::aggregateNet(cellchat)
-  cellchat <- CellChat::netAnalysis_computeCentrality(
-    cellchat,
-    slot.name = "netP"
-  )
+  message("2. identifyOverExpressedGenes")
+  print(system.time({
+    cellchat <- identifyOverExpressedGenes(cellchat)
+  }))
+
+  message("3. identifyOverExpressedInteractions")
+  print(system.time({
+    cellchat <- identifyOverExpressedInteractions(cellchat)
+  }))
+
+  if (use_parallel) {
+    future::plan(future::multisession, workers = workers_prob)
+  } else {
+    future::plan(future::sequential)
+  }
+  message("4. computeCommunProb")
+  print(system.time({
+    cellchat <- computeCommunProb(
+      cellchat,
+      type = type
+    )
+  }))
+
+  message("5. filterCommunication")
+  print(system.time({
+    cellchat <- filterCommunication(
+      cellchat,
+      min.cells = min.cells
+    )
+  }))
+
+  message("6. computeCommunProbPathway")
+  print(system.time({
+    cellchat <- computeCommunProbPathway(cellchat)
+  }))
+
+  message("7. aggregateNet")
+  print(system.time({
+    cellchat <- aggregateNet(cellchat)
+  }))
+
+  message("8. centrality")
+  print(system.time({
+    cellchat <- netAnalysis_computeCentrality(
+      cellchat,
+      slot.name = "netP"
+    )
+  }))
+
+  future::plan(future::sequential)
   return(cellchat)
 }
-
