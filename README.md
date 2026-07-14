@@ -64,7 +64,7 @@ Source: `R/deg-plots.R`
 | `volcano_plot_scRNA()` | Draw a volcano plot for Seurat marker results and label the most significant upregulated and downregulated genes. |
 | `plot_deg_heatmap_for_DEGseq2()` | Draw a clustered DEG heatmap with optional labels for selected and top-ranked genes. |
 | `plot_deg_comparison()` | Compare two DEG analyses using fold-change groups, correlation statistics, and selected gene labels. |
-| `plot_deg_manhattan()` | Draw faceted Manhattan-style DEG plots using genomic positions and signed significance scores. |
+| `plot_deg_manhattan()` | Draw faceted Manhattan-style DEG plots based on genomic positions and signed significance scores. |
 
 ### Survival analysis
 
@@ -84,16 +84,12 @@ Source: `R/enrichment.R`
 
 | Function | Description |
 |---|---|
-| `enrich_combind()` | Run human GO, KEGG, and WikiPathways over-representation analyses for Entrez genes. |
-| `enrich_combind_s()` | Run species-aware GO and KEGG over-representation analyses for human or mouse genes. |
-| `enrich_combind_s2()` | Run extended GO and KEGG analyses with optional Reactome and Hallmark results. |
+| `enrich_combind_s2()` | Unified GO and KEGG analysis with optional Reactome, Hallmark, and WikiPathways results. |
 | `enricher_plot()` | Combine selected enrichment categories into a summary visualization. |
 | `gsea_plot_custorm()` | Build a customized GSEA running-score plot for selected terms. |
 | `go_plot_custom()` | Draw a customized GO enrichment plot for selected terms. |
 | `GO_BP_treeplot_DESeq2()` | Run and visualize enrichment analyses separately for upregulated and downregulated DESeq2 genes. |
 | `GO_BP_treeplot_scRNAseq()` | Run and visualize enrichment analyses separately for upregulated and downregulated single-cell markers. |
-| `GSEA_DEGseq()` | Run Hallmark, KEGG, and GO Biological Process GSEA from DESeq2 fold changes. |
-| `GSEA_scRNAseq()` | Run Hallmark, KEGG, and GO Biological Process GSEA from single-cell marker fold changes. |
 | `GSEA_analysis()` | Run configurable species-aware GSEA using multiple ranking metrics and gene-set databases. |
 
 ### Correlation analysis
@@ -129,7 +125,7 @@ Source: `R/scrna.R`
 |---|---|
 | `scRNA_SCT_norm()` | Integrate a list of Seurat objects using the SCT workflow, followed by PCA, UMAP, and clustering. |
 | `SCT_METHOD_V3()` | Run a Seurat v5 SCT and RPCA integration workflow with configurable graph and UMAP parameters. |
-| `scTYPE_annotation()` | Annotate Seurat clusters using scTYPE marker gene sets and scores. |
+| `scTYPE_annotation()` | Annotate Seurat clusters using an explicit scTYPE directory or `AbelR.sctype_dir` option. |
 
 ### Trajectory analysis
 

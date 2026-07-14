@@ -1,151 +1,5 @@
 # Functions for enrichment analyses.
 
-enrich_combind <- function(gene, pvc = 1, qvc = 1, universe = NULL) {
-  wp2gene <- read.gmt.wp(
-    "/lustre/home/acct-medkkw/medlyb/wl_proj/WL234_Lib/database/gmt/wikipathways-20190510-gmt-Homo_sapiens.gmt"
-  )
-  #  wp2gene <- wp2gene %>% tidyr::separate(term, c("name","version","wpid","org"), "%")
-  wpid2gene <- wp2gene %>% dplyr::select(wpid, gene)
-  wpid2name <- wp2gene %>% dplyr::select(wpid, name)
-  ego_bp <- enrichGO(
-    gene = gene,
-    OrgDb = org.Hs.eg.db,
-    keyType = 'ENTREZID',
-    ont = "BP",
-    pAdjustMethod = "BH",
-    pvalueCutoff = pvc,
-    qvalueCutoff = qvc,
-    readable = TRUE,
-    universe = universe
-  )
-  ego_cc <- enrichGO(
-    gene = gene,
-    OrgDb = org.Hs.eg.db,
-    keyType = 'ENTREZID',
-    ont = "CC",
-    pAdjustMethod = "BH",
-    pvalueCutoff = pvc,
-    qvalueCutoff = qvc,
-    readable = TRUE,
-    universe = universe
-  )
-  ego_mf <- enrichGO(
-    gene = gene,
-    OrgDb = org.Hs.eg.db,
-    keyType = 'ENTREZID',
-    ont = "MF",
-    pAdjustMethod = "BH",
-    pvalueCutoff = pvc,
-    qvalueCutoff = qvc,
-    readable = TRUE,
-    universe = universe
-  )
-  ewp <- enricher(
-    gene,
-    TERM2GENE = wpid2gene,
-    TERM2NAME = wpid2name,
-    pvalueCutoff = pvc,
-    qvalueCutoff = qvc,
-    universe = universe
-  )
-  ewp <- setReadable(ewp, org.Hs.eg.db, keyType = "ENTREZID")
-  ekg <- enrichKEGG(
-    gene,
-    organism = "hsa",
-    pvalueCutoff = pvc,
-    qvalueCutoff = qvc,
-    universe = universe
-  )
-  ekg <- setReadable(ekg, org.Hs.eg.db, keyType = "ENTREZID")
-  tmp <- list()
-  tmp[["ego_bp"]] <- ego_bp
-  tmp[["ego_cc"]] <- ego_cc
-  tmp[["ego_mf"]] <- ego_mf
-  tmp[["ewp"]] <- ewp
-  tmp[["ekg"]] <- ekg
-  return(tmp)
-}
-
-
-enrich_combind_s <- function(
-  gene,
-  pvc = 1,
-  qvc = 1,
-  universe = NULL,
-  species = "human"
-) {
-  library(clusterProfiler)
-  library(dplyr)
-
-  if (species %in% c("human", "Homo sapiens", "hsa")) {
-    library(org.Hs.eg.db)
-    current_OrgDb <- org.Hs.eg.db
-    kegg_org <- "hsa"
-  } else if (species %in% c("mouse", "Mus musculus", "mmu")) {
-    library(org.Mm.eg.db)
-    current_OrgDb <- org.Mm.eg.db
-    kegg_org <- "mmu"
-  } else {
-    stop("Species must be either 'human' or 'mouse'")
-  }
-
-  ego_bp <- enrichGO(
-    gene = gene,
-    OrgDb = current_OrgDb,
-    keyType = 'ENTREZID',
-    ont = "BP",
-    pAdjustMethod = "BH",
-    pvalueCutoff = pvc,
-    qvalueCutoff = qvc,
-    readable = TRUE,
-    universe = universe
-  )
-
-  ego_cc <- enrichGO(
-    gene = gene,
-    OrgDb = current_OrgDb,
-    keyType = 'ENTREZID',
-    ont = "CC",
-    pAdjustMethod = "BH",
-    pvalueCutoff = pvc,
-    qvalueCutoff = qvc,
-    readable = TRUE,
-    universe = universe
-  )
-
-  ego_mf <- enrichGO(
-    gene = gene,
-    OrgDb = current_OrgDb,
-    keyType = 'ENTREZID',
-    ont = "MF",
-    pAdjustMethod = "BH",
-    pvalueCutoff = pvc,
-    qvalueCutoff = qvc,
-    readable = TRUE,
-    universe = universe
-  )
-
-  ekg <- enrichKEGG(
-    gene,
-    organism = kegg_org,
-    pvalueCutoff = pvc,
-    qvalueCutoff = qvc,
-    universe = universe
-  )
-  if (!is.null(ekg)) {
-    ekg <- setReadable(ekg, current_OrgDb, keyType = "ENTREZID")
-  }
-
-  tmp <- list()
-  tmp[["ego_bp"]] <- ego_bp
-  tmp[["ego_cc"]] <- ego_cc
-  tmp[["ego_mf"]] <- ego_mf
-  tmp[["ekg"]] <- ekg
-
-  return(tmp)
-}
-
-
 enrich_combind_s2 <- function(
   gene,
   pvc = 1,
@@ -154,29 +8,32 @@ enrich_combind_s2 <- function(
   species = "human",
   reactome = TRUE,
   hallmark = TRUE,
+  wikipathways = FALSE,
   minGSSize = 10,
   maxGSSize = 500
 ) {
-  suppressPackageStartupMessages({
-    library(clusterProfiler)
-    library(dplyr)
-  })
+  if (!requireNamespace("clusterProfiler", quietly = TRUE)) {
+    stop("Package 'clusterProfiler' is required for enrichment analysis.")
+  }
 
   ## -------- species setup --------
-  if (species %in% c("human", "Homo sapiens", "hsa")) {
-    suppressPackageStartupMessages(library(org.Hs.eg.db))
-    current_OrgDb <- org.Hs.eg.db
+  species <- .abel_normalize_species(species)
+  if (species == "human") {
+    if (!requireNamespace("org.Hs.eg.db", quietly = TRUE)) {
+      stop("Package 'org.Hs.eg.db' is required for human enrichment.")
+    }
+    current_OrgDb <- getExportedValue("org.Hs.eg.db", "org.Hs.eg.db")
     kegg_org <- "hsa"
     reactome_org <- "human"
     msig_species <- "Homo sapiens"
-  } else if (species %in% c("mouse", "Mus musculus", "mmu")) {
-    suppressPackageStartupMessages(library(org.Mm.eg.db))
-    current_OrgDb <- org.Mm.eg.db
+  } else {
+    if (!requireNamespace("org.Mm.eg.db", quietly = TRUE)) {
+      stop("Package 'org.Mm.eg.db' is required for mouse enrichment.")
+    }
+    current_OrgDb <- getExportedValue("org.Mm.eg.db", "org.Mm.eg.db")
     kegg_org <- "mmu"
     reactome_org <- "mouse"
     msig_species <- "Mus musculus"
-  } else {
-    stop("Species must be either 'human' or 'mouse'")
   }
 
   ## -------- helper: keep ENTREZ only --------
@@ -190,7 +47,7 @@ enrich_combind_s2 <- function(
   }
 
   ## -------- GO --------
-  ego_bp <- enrichGO(
+  ego_bp <- clusterProfiler::enrichGO(
     gene = gene,
     OrgDb = current_OrgDb,
     keyType = "ENTREZID",
@@ -204,7 +61,7 @@ enrich_combind_s2 <- function(
     maxGSSize = maxGSSize
   )
 
-  ego_cc <- enrichGO(
+  ego_cc <- clusterProfiler::enrichGO(
     gene = gene,
     OrgDb = current_OrgDb,
     keyType = "ENTREZID",
@@ -218,7 +75,7 @@ enrich_combind_s2 <- function(
     maxGSSize = maxGSSize
   )
 
-  ego_mf <- enrichGO(
+  ego_mf <- clusterProfiler::enrichGO(
     gene = gene,
     OrgDb = current_OrgDb,
     keyType = "ENTREZID",
@@ -233,7 +90,7 @@ enrich_combind_s2 <- function(
   )
 
   ## -------- KEGG --------
-  ekg <- enrichKEGG(
+  ekg <- clusterProfiler::enrichKEGG(
     gene = gene,
     organism = kegg_org,
     pvalueCutoff = pvc,
@@ -243,14 +100,20 @@ enrich_combind_s2 <- function(
     maxGSSize = maxGSSize
   )
   if (!is.null(ekg) && nrow(as.data.frame(ekg)) > 0) {
-    ekg <- setReadable(ekg, current_OrgDb, keyType = "ENTREZID")
+    ekg <- clusterProfiler::setReadable(
+      ekg,
+      current_OrgDb,
+      keyType = "ENTREZID"
+    )
   }
 
   ## -------- Reactome --------
   erct <- NULL
   if (isTRUE(reactome)) {
-    suppressPackageStartupMessages(library(ReactomePA))
-    erct <- enrichPathway(
+    if (!requireNamespace("ReactomePA", quietly = TRUE)) {
+      stop("Package 'ReactomePA' is required when reactome = TRUE.")
+    }
+    erct <- ReactomePA::enrichPathway(
       gene = gene,
       organism = reactome_org,
       pvalueCutoff = pvc,
@@ -267,18 +130,17 @@ enrich_combind_s2 <- function(
   ## -------- MSigDB Hallmark (ORA via enricher) --------
   ehall <- NULL
   if (isTRUE(hallmark)) {
-    suppressPackageStartupMessages({
-      library(msigdbr)
-      library(tidyr)
-    })
+    if (!requireNamespace("msigdbr", quietly = TRUE)) {
+      stop("Package 'msigdbr' is required when hallmark = TRUE.")
+    }
 
     # msigdbr returns gene symbols; convert to ENTREZID to match 'gene'
-    msig_h <- msigdbr(species = msig_species, category = "H") %>%
+    msig_h <- msigdbr::msigdbr(species = msig_species, category = "H") %>%
       dplyr::select(gs_name, gene_symbol) %>%
       distinct()
 
     # SYMBOL -> ENTREZ
-    sym2ent <- bitr(
+    sym2ent <- clusterProfiler::bitr(
       msig_h$gene_symbol,
       fromType = "SYMBOL",
       toType = "ENTREZID",
@@ -295,7 +157,7 @@ enrich_combind_s2 <- function(
     # TERM2GENE format for enricher
     term2gene_h <- msig_h2 %>% dplyr::rename(term = gs_name, gene = ENTREZID)
 
-    ehall <- enricher(
+    ehall <- clusterProfiler::enricher(
       gene = gene,
       TERM2GENE = term2gene_h,
       universe = universe,
@@ -308,9 +170,65 @@ enrich_combind_s2 <- function(
 
     # add "readable" gene symbols for convenience
     if (!is.null(ehall) && nrow(as.data.frame(ehall)) > 0) {
-      ehall <- setReadable(ehall, current_OrgDb, keyType = "ENTREZID")
+      ehall <- clusterProfiler::setReadable(
+        ehall,
+        current_OrgDb,
+        keyType = "ENTREZID"
+      )
     } else {
       ehall <- NULL
+    }
+  }
+
+  ## -------- MSigDB WikiPathways --------
+  ewp <- NULL
+  if (isTRUE(wikipathways)) {
+    if (!requireNamespace("msigdbr", quietly = TRUE)) {
+      stop("Package 'msigdbr' is required when wikipathways = TRUE.")
+    }
+    wp <- try(
+      msigdbr::msigdbr(
+        species = msig_species,
+        collection = "C2",
+        subcollection = "CP:WIKIPATHWAYS"
+      ),
+      silent = TRUE
+    )
+    if (inherits(wp, "try-error")) {
+      wp <- msigdbr::msigdbr(
+        species = msig_species,
+        category = "C2",
+        subcategory = "CP:WIKIPATHWAYS"
+      )
+    }
+    entrez_col <- if ("ncbi_gene" %in% colnames(wp)) {
+      "ncbi_gene"
+    } else {
+      "entrez_gene"
+    }
+    term2gene_wp <- unique(data.frame(
+      term = wp$gs_name,
+      gene = as.character(wp[[entrez_col]])
+    ))
+    term2gene_wp <- term2gene_wp[!is.na(term2gene_wp$gene), ]
+    ewp <- clusterProfiler::enricher(
+      gene = gene,
+      TERM2GENE = term2gene_wp,
+      universe = universe,
+      pAdjustMethod = "BH",
+      pvalueCutoff = pvc,
+      qvalueCutoff = qvc,
+      minGSSize = minGSSize,
+      maxGSSize = maxGSSize
+    )
+    if (!is.null(ewp) && nrow(as.data.frame(ewp)) > 0) {
+      ewp <- clusterProfiler::setReadable(
+        ewp,
+        current_OrgDb,
+        keyType = "ENTREZID"
+      )
+    } else {
+      ewp <- NULL
     }
   }
 
@@ -321,7 +239,8 @@ enrich_combind_s2 <- function(
     ego_mf = ego_mf,
     ekg = ekg,
     reactome = erct,
-    hallmark = ehall
+    hallmark = ehall,
+    wikipathways = ewp
   )
   return(out)
 }
@@ -354,8 +273,8 @@ enricher_plot <- function(
   )
   df <- rbind(df, df.tmp)
   df.tmp <- data.frame(
-    Description = enricher$ewp@result[wp, 2],
-    Pvalue = enricher$ewp@result[wp, value],
+    Description = enricher$wikipathways@result[wp, 2],
+    Pvalue = enricher$wikipathways@result[wp, value],
     Type = rep("WikiPath", length(wp))
   )
   df <- rbind(df, df.tmp)
@@ -385,7 +304,6 @@ enricher_plot <- function(
 
 
 gsea_plot_custorm <- function(gsea_ob, select_term, color, xpos = 3000) {
-  library("ggrastr")
   #gsea_ob <- aml_phenolyzer.gsea.crc
   #select_term <- 1
   #color <- "#08537C"
@@ -397,9 +315,10 @@ gsea_plot_custorm <- function(gsea_ob, select_term, color, xpos = 3000) {
   )
   #pv <- round(gsea_ob@result[select_term,"p.adjust"], digits = 6)
   #pv <- round(gsea_ob@result[select_term,"pvalue"], digits = 6)
+  gs_info <- utils::getFromNamespace("gsInfo", "enrichplot")
   gsdata <- do.call(
     rbind,
-    lapply(select_term, enrichplot:::gsInfo, object = gsea_ob)
+    lapply(select_term, gs_info, object = gsea_ob)
   )
   ypos <- sign(nes) * max(abs(gsdata$runningScore)) / 2
   title_text <- gsea_ob@result[select_term, "Description"]
@@ -545,9 +464,24 @@ GO_BP_treeplot_DESeq2 <- function(deg.df, label, pv = 0.05, lfc = log2(1.5)) {
   dw.entrez <- unique(na.omit(dw.entrez))
   deg.entrez <- unique(c(up.entrez, dw.entrez))
   color <- "YlGnBu"
-  up.enricher <- enrich_combind(up.entrez)
-  dw.enricher <- enrich_combind(dw.entrez)
-  deg.enricher <- enrich_combind(deg.entrez)
+  up.enricher <- enrich_combind_s2(
+    up.entrez,
+    species = "human",
+    reactome = FALSE,
+    hallmark = FALSE
+  )
+  dw.enricher <- enrich_combind_s2(
+    dw.entrez,
+    species = "human",
+    reactome = FALSE,
+    hallmark = FALSE
+  )
+  deg.enricher <- enrich_combind_s2(
+    deg.entrez,
+    species = "human",
+    reactome = FALSE,
+    hallmark = FALSE
+  )
   ##################go_bp
   ego_bp.up2 <- enrichplot::pairwise_termsim(up.enricher$ego_bp)
   ego_bp.dw2 <- enrichplot::pairwise_termsim(dw.enricher$ego_bp)
@@ -751,8 +685,18 @@ GO_BP_treeplot_scRNAseq <- function(deg.df, label, pv = 0.05, lfc = 0.25) {
   up.entrez <- unique(na.omit(up.entrez))
   dw.entrez <- unique(na.omit(dw.entrez))
   color <- "YlGnBu"
-  up.enricher <- enrich_combind(up.entrez)
-  dw.enricher <- enrich_combind(dw.entrez)
+  up.enricher <- enrich_combind_s2(
+    up.entrez,
+    species = "human",
+    reactome = FALSE,
+    hallmark = FALSE
+  )
+  dw.enricher <- enrich_combind_s2(
+    dw.entrez,
+    species = "human",
+    reactome = FALSE,
+    hallmark = FALSE
+  )
   ##################go_bp
   ego_bp.up2 <- enrichplot::pairwise_termsim(up.enricher$ego_bp)
   ego_bp.dw2 <- enrichplot::pairwise_termsim(dw.enricher$ego_bp)
@@ -876,171 +820,6 @@ GO_BP_treeplot_scRNAseq <- function(deg.df, label, pv = 0.05, lfc = 0.25) {
   result[["up_enricher"]] <- up.enricher
   result[["dw_enricher"]] <- dw.enricher
   result[["plot"]] <- plot.ls
-
-  return(result)
-}
-
-
-GSEA_DEGseq <- function(deg.df, species = "human") {
-  # 加载必要的包
-  library(msigdbr)
-  library(clusterProfiler)
-  library(dplyr)
-
-  # 1. 根据物种参数设置对应的变量
-  if (species %in% c("human", "Homo sapiens", "hsa")) {
-    library(org.Hs.eg.db) # 确保加载人类数据库
-    msig_species <- "Homo sapiens"
-    kegg_org <- "hsa"
-    current_OrgDb <- org.Hs.eg.db
-  } else if (species %in% c("mouse", "Mus musculus", "mmu")) {
-    library(org.Mm.eg.db) # 确保加载小鼠数据库
-    msig_species <- "Mus musculus"
-    kegg_org <- "mmu"
-    current_OrgDb <- org.Mm.eg.db
-  } else {
-    stop("Species must be either 'human' or 'mouse'")
-  }
-
-  # 2. 准备基因列表 (这一步不分物种，假设输入都是Entrez ID)
-  # 确保 log2FoldChange 是数值型，Entrez 是字符型
-  gene.fc <- deg.df[
-    !is.na(deg.df$Entrez) & !duplicated(deg.df$Entrez),
-  ]$log2FoldChange
-  names(gene.fc) <- deg.df[
-    !is.na(deg.df$Entrez) & !duplicated(deg.df$Entrez),
-  ]$Entrez
-  gene.fc <- sort(gene.fc, decreasing = TRUE)
-
-  # 3. 获取 Hallmark 基因集 (使用动态变量 msig_species)
-  m_t2g.H <- msigdbr(species = msig_species, category = "H") %>%
-    dplyr::select(gs_name, entrez_gene)
-
-  # 4. GSEA Hallmark 分析
-  gsea.H <- GSEA(gene.fc, TERM2GENE = m_t2g.H, pvalueCutoff = 1)
-  # 使用动态变量 current_OrgDb 进行 ID 转换
-  if (!is.null(gsea.H)) {
-    gsea.H <- setReadable(gsea.H, OrgDb = current_OrgDb, keyType = "ENTREZID")
-  }
-
-  # 5. GSEA KEGG 分析 (使用动态变量 kegg_org)
-  gsea.kegg <- gseKEGG(
-    geneList = gene.fc,
-    organism = kegg_org,
-    keyType = "kegg",
-    pvalueCutoff = 1
-  )
-  if (!is.null(gsea.kegg)) {
-    gsea.kegg <- setReadable(
-      gsea.kegg,
-      OrgDb = current_OrgDb,
-      keyType = "ENTREZID"
-    )
-  }
-
-  # 6. GSEA GO_BP 分析 (使用动态变量 current_OrgDb)
-  gsea.go_bp <- gseGO(
-    gene.fc,
-    OrgDb = current_OrgDb,
-    ont = "BP",
-    pvalueCutoff = 1,
-    keyType = "ENTREZID"
-  )
-  if (!is.null(gsea.go_bp)) {
-    gsea.go_bp <- setReadable(
-      gsea.go_bp,
-      OrgDb = current_OrgDb,
-      keyType = "ENTREZID"
-    )
-  }
-
-  # 7. 返回结果
-  result <- list()
-  result[["Hallmark"]] <- gsea.H
-  result[["KEGG"]] <- gsea.kegg
-  result[["GO_BP"]] <- gsea.go_bp
-
-  return(result)
-}
-
-
-GSEA_scRNAseq <- function(deg.df, species = c("human", "mouse")) {
-  species <- match.arg(species)
-
-  library(dplyr)
-  library(msigdbr)
-  library(clusterProfiler)
-  library("org.Mm.eg.db")
-
-  if (!"Symbol" %in% colnames(deg.df)) {
-    stop("Column 'Symbol' not found in deg.df")
-  }
-  if (!"avg_log2FC" %in% colnames(deg.df)) {
-    stop("Column 'avg_log2FC' not found in deg.df")
-  }
-
-  ## species-specific settings
-  if (species == "human") {
-    msig_species <- "Homo sapiens"
-    org_db <- org.Hs.eg.db
-    kegg_org <- "hsa"
-  } else if (species == "mouse") {
-    msig_species <- "Mus musculus"
-    org_db <- org.Mm.eg.db
-    kegg_org <- "mmu"
-  }
-
-  ## Hallmark gene sets
-  m_t2g.H <- msigdbr(species = msig_species, category = "H") %>%
-    dplyr::select(gs_name, entrez_gene)
-
-  ## Symbol -> Entrez
-  deg.df$Entrez <- TransGeneID(
-    deg.df$Symbol,
-    fromType = "Symbol",
-    toType = "Entrez",
-    organism = ifelse(species == "human", "hsa", "mmu")
-  )
-
-  ## build ranked gene list
-  deg.sub <- deg.df[!is.na(deg.df$Entrez), c("Entrez", "avg_log2FC")]
-  deg.sub$Entrez <- as.character(deg.sub$Entrez)
-
-  ## remove duplicated Entrez IDs, keep the one with largest absolute FC
-  deg.sub <- deg.sub %>%
-    group_by(Entrez) %>%
-    slice_max(order_by = abs(avg_log2FC), n = 1, with_ties = FALSE) %>%
-    ungroup()
-
-  gene.fc <- deg.sub$avg_log2FC
-  names(gene.fc) <- deg.sub$Entrez
-  gene.fc <- sort(gene.fc, decreasing = TRUE)
-
-  ## run GSEA
-  gsea.H <- GSEA(gene.fc, TERM2GENE = m_t2g.H, pvalueCutoff = 1)
-  gsea.H <- setReadable(gsea.H, OrgDb = org_db, keyType = "ENTREZID")
-
-  gsea.kegg <- gseKEGG(
-    geneList = gene.fc,
-    organism = kegg_org,
-    keyType = "kegg",
-    pvalueCutoff = 1
-  )
-  gsea.kegg <- setReadable(gsea.kegg, OrgDb = org_db, keyType = "ENTREZID")
-
-  gsea.go_bp <- gseGO(
-    geneList = gene.fc,
-    OrgDb = org_db,
-    ont = "BP",
-    pvalueCutoff = 1,
-    keyType = "ENTREZID"
-  )
-  gsea.go_bp <- setReadable(gsea.go_bp, OrgDb = org_db, keyType = "ENTREZID")
-
-  result <- list()
-  result[["Hallmark"]] <- gsea.H
-  result[["KEGG"]] <- gsea.kegg
-  result[["GO_BP"]] <- gsea.go_bp
 
   return(result)
 }
@@ -1505,4 +1284,3 @@ GSEA_analysis <- function(
 
   return(result)
 }
-

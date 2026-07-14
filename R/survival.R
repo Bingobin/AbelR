@@ -49,22 +49,27 @@ RiskScore_multivar_cox <- function(
     c(gene.list, feature.list),
     drop = FALSE
   ])
-  model <- coxph(survobj ~ survpre)
-  #  if(is.null(cox.df)){
-  cox.df.sum <- summary(model)
-  cox.df <- as.data.frame(cbind(cox.df.sum$coefficients, cox.df.sum$conf.int))
-  cox.df$Feature <- gsub("survpre", "", rownames(cox.df))
-  cox.df <- data.table::as.data.table(cox.df[, c(10, 1, 5, 6, 8, 9)])
-  colnames(cox.df) <- c(
-    "Feature",
-    "Coefficient",
-    "Pvalue",
-    "Hazard.ratio",
-    "HR.Lower.95",
-    "HR.Upper.95"
-  )
-  cox.df <- na.omit(cox.df)
-  #  }
+  if (is.null(cox.df)) {
+    model <- coxph(survobj ~ survpre)
+    cox.df.sum <- summary(model)
+    cox.df <- as.data.frame(cbind(cox.df.sum$coefficients, cox.df.sum$conf.int))
+    cox.df$Feature <- gsub("survpre", "", rownames(cox.df))
+    cox.df <- data.table::as.data.table(cox.df[, c(10, 1, 5, 6, 8, 9)])
+    colnames(cox.df) <- c(
+      "Feature",
+      "Coefficient",
+      "Pvalue",
+      "Hazard.ratio",
+      "HR.Lower.95",
+      "HR.Upper.95"
+    )
+    cox.df <- na.omit(cox.df)
+  } else {
+    required_cox_cols <- c("Feature", "Coefficient")
+    if (!all(required_cox_cols %in% colnames(cox.df))) {
+      stop("cox.df must contain Feature and Coefficient columns.")
+    }
+  }
   ls_df <- lapply(1:nrow(surv_model.df), function(x) {
     sample <- rownames(surv_model.df)[x]
     score <- sum(sapply(1:nrow(cox.df), function(i) {
@@ -85,7 +90,7 @@ RiskScore_multivar_cox <- function(
   rs.df.clinc <- merge(rs.df, surv_model.df, by.x = 1, by.y = 0, all = FALSE)
   rs.df.clinc <- merge(
     rs.df.clinc,
-    aml_all_wt1.clinc,
+    clinic.df,
     by.x = 1,
     by.y = 2,
     all = FALSE
@@ -302,5 +307,4 @@ plot_roc_curve <- function(risk.df) {
       axis.line = element_blank()
     )
 }
-
 

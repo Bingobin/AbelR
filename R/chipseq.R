@@ -13,7 +13,6 @@ enhancer_rank_plot <- function(label, sample, top, rank.df) {
   #  sig_gene <- "WT1"
   #  sample <- "CHH"
   #  top <- 5
-  library("ggrastr")
   enhancer_signal <- rank.df %>% filter(Sample == sample)
   p <- ggplot(enhancer_signal, aes(x = Rank / 1000, y = Signal)) +
     geom_point_rast(aes(color = Type), alpha = 1, size = 0.5) +
@@ -162,8 +161,7 @@ peak_pieplot_byhomer <- function(
     )
   )
   df.pie$labs <- paste(df.pie$Pro, "%")
-  df.pie <- data.table::as.data.table(df.pie)
-  df.pie[, `:=`(TypeII, paste0(Type, "(", labs, ")"))]
+  df.pie$TypeII <- paste0(df.pie$Type, "(", df.pie$labs, ")")
   df.pie$TypeII <- fct_reorder(df.pie$TypeII, -df.pie$Num)
   #ggdonutchart(df.pie, "Num", label = "labs", fill = "Type",color = "white",lab.pos = "out", lab.font = c("black","blod",5)) + theme(legend.position = "right")  + scale_fill_manual(values = color) + ggtitle(prefix)
   ggpie(
@@ -188,7 +186,7 @@ peak_heatmap_byhomer <- function(
   color = "#08537C",
   max = 10,
   prefix = "Heammap",
-  filedir = "~/Desktop",
+  filedir = ".",
   width = 2,
   height = 10,
   gaps = 0
@@ -241,30 +239,59 @@ track_view_cre_mut <- function(chr, region, mut_pos, tf_name, num) {
   #  mut_pos <- c(32421395,32421396,32421397,32426110)
   #  tf_name <- c("WT1","WT1-AS")
   #  num <- c(1,1,1,1)
-  SNPs <- GRanges(chr, IRanges(mut_pos, width = 1), strand = "-")
+  for (pkg in c(
+    "trackViewer",
+    "TxDb.Hsapiens.UCSC.hg38.knownGene",
+    "GenomicRanges",
+    "IRanges"
+  )) {
+    if (!requireNamespace(pkg, quietly = TRUE)) {
+      stop("Package '", pkg, "' is required for track_view_cre_mut().")
+    }
+  }
+  symbol_map <- getExportedValue("org.Hs.eg.db", "org.Hs.egSYMBOL2EG")
+  txdb <- getExportedValue(
+    "TxDb.Hsapiens.UCSC.hg38.knownGene",
+    "TxDb.Hsapiens.UCSC.hg38.knownGene"
+  )
+  SNPs <- GenomicRanges::GRanges(
+    chr,
+    IRanges::IRanges(mut_pos, width = 1),
+    strand = "-"
+  )
   SNPs$color <- "#D7191C"
   SNPs$border <- "#D7191C"
   SNPs$feature.height <- 0.05
   SNPs$cex <- 0.8
-  TF1 <- geneTrack(
-    get(tf_name[1], org.Hs.egSYMBOL2EG),
-    TxDb.Hsapiens.UCSC.hg38.knownGene
+  TF1 <- trackViewer::geneTrack(
+    get(tf_name[1], symbol_map),
+    txdb
   )[[1]]
   TF1$dat2 <- SNPs
-  TF2 <- geneTrack(
-    get(tf_name[2], org.Hs.egSYMBOL2EG),
-    TxDb.Hsapiens.UCSC.hg38.knownGene
+  TF2 <- trackViewer::geneTrack(
+    get(tf_name[2], symbol_map),
+    txdb
   )[[1]]
   TF2$dat2 <- SNPs
-  gr <- GRanges(chr, IRanges(region[1], region[4]))
-  optSty <- optimizeStyle(trackList(TF2, TF1), theme = "bw")
+  gr <- GenomicRanges::GRanges(
+    chr,
+    IRanges::IRanges(region[1], region[4])
+  )
+  optSty <- trackViewer::optimizeStyle(
+    trackViewer::trackList(TF2, TF1),
+    theme = "bw"
+  )
   trackList <- optSty$tracks
   viewerStyle <- optSty$style
-  setTrackStyleParam(trackList[[1]], "ylabgp", list(cex = 0.8))
-  setTrackStyleParam(trackList[[2]], "ylabgp", list(cex = 0.8))
+  trackViewer::setTrackStyleParam(
+    trackList[[1]], "ylabgp", list(cex = 0.8)
+  )
+  trackViewer::setTrackStyleParam(
+    trackList[[2]], "ylabgp", list(cex = 0.8)
+  )
   names(trackList) <- rev(tf_name)
-  vp <- viewTracks(trackList, gr = gr, viewerStyle = viewerStyle)
-  addGuideLine(region, vp = vp)
+  vp <- trackViewer::viewTracks(trackList, gr = gr, viewerStyle = viewerStyle)
+  trackViewer::addGuideLine(region, vp = vp)
   #  return(vp)
 }
 
@@ -289,38 +316,54 @@ trackview_peak_roi <- function(
   #tf_name <- "ZMIZ1"
   #info <ID BW BAM>
   #chrom <- "chr21:34,787,801-36,004,667"
-  library(TxDb.Hsapiens.UCSC.hg38.knownGene)
-  library(trackViewer)
+  for (pkg in c(
+    "trackViewer",
+    "TxDb.Hsapiens.UCSC.hg38.knownGene",
+    "GenomicRanges",
+    "IRanges"
+  )) {
+    if (!requireNamespace(pkg, quietly = TRUE)) {
+      stop("Package '", pkg, "' is required for trackview_peak_roi().")
+    }
+  }
   chr <- sub(":.*", "", chrom)
   region_str <- sub(".*:", "", chrom)
   region_split <- strsplit(region_str, "-")[[1]]
   region <- as.numeric(gsub(",", "", region_split))
 
-  TF1 <- geneTrack(
-    get(tf_name[1], org.Hs.egSYMBOL2EG),
-    TxDb.Hsapiens.UCSC.hg38.knownGene
+  symbol_map <- getExportedValue("org.Hs.eg.db", "org.Hs.egSYMBOL2EG")
+  txdb <- getExportedValue(
+    "TxDb.Hsapiens.UCSC.hg38.knownGene",
+    "TxDb.Hsapiens.UCSC.hg38.knownGene"
+  )
+  TF1 <- trackViewer::geneTrack(
+    get(tf_name[1], symbol_map),
+    txdb
   )[[1]]
   #chr_tf <- as.character(unique(seqnames(TF1@dat)))
   #start_tf <- min(start(TF1@dat))
   #end_tf <-  max(start(TF1@dat))
 
-  gr <- GRanges(chr, IRanges(min(region) - extend, max(region) + extend))
+  gr <- GenomicRanges::GRanges(
+    chr,
+    IRanges::IRanges(min(region) - extend, max(region) + extend)
+  )
   if (type == "BAM") {
     Score <- lapply(1:nrow(info), function(x) {
-      importBam(info$BAM_t[x], ranges = gr, pairs = FALSE)
+      trackViewer::importBam(info$BAM_t[x], ranges = gr, pairs = FALSE)
     })
   } else if (type == "BigWig") {
     Score <- lapply(1:nrow(info), function(x) {
-      importScore(info$BW[x], format = "BigWig", ranges = gr)
+      trackViewer::importScore(info$BW[x], format = "BigWig", ranges = gr)
     })
   } else if (type == "BED") {
     Score <- lapply(1:nrow(info), function(x) {
-      importScore(info$BED[x], format = "BED", ranges = gr)
+      trackViewer::importScore(info$BED[x], format = "BED", ranges = gr)
     })
   } else {
     stop("Unsupported type: ", type, ". Expected 'BAM' or 'BigWig'.")
   }
-  optSty <- optimizeStyle(
+  optSty <- trackViewer::optimizeStyle(
     do.call(trackViewer::trackList, c(list(TF1), Score)),
     theme = "bw"
   )
@@ -332,26 +375,28 @@ trackview_peak_roi <- function(
 
   if (length(ylim) > 1) {
     for (i in 2:length(trackList)) {
-      setTrackStyleParam(trackList[[i]], "ylim", c(0, ylim[i - 1]))
+      trackViewer::setTrackStyleParam(
+        trackList[[i]], "ylim", c(0, ylim[i - 1])
+      )
     }
   } else if (length(ylim) == 1) {
     if (ylim > 0) {
       for (i in 2:length(trackList)) {
-        setTrackStyleParam(trackList[[i]], "ylim", c(0, ylim))
+        trackViewer::setTrackStyleParam(trackList[[i]], "ylim", c(0, ylim))
       }
     }
   }
 
   for (i in 1:length(trackList)) {
-    setTrackStyleParam(trackList[[i]], "color", Color[i])
+    trackViewer::setTrackStyleParam(trackList[[i]], "color", Color[i])
   }
   for (i in 1:length(trackList)) {
-    setTrackStyleParam(trackList[[i]], "ylabgp", list(cex = .8))
+    trackViewer::setTrackStyleParam(trackList[[i]], "ylabgp", list(cex = .8))
   }
-  setTrackStyleParam(trackList[[1]], "height", 0.03)
+  trackViewer::setTrackStyleParam(trackList[[1]], "height", 0.03)
   names(trackList) <- c(tf_name, info$ID)
-  vp <- viewTracks(trackList, gr = gr, viewerStyle = viewerStyle)
-  addGuideLine(region, vp = vp)
+  vp <- trackViewer::viewTracks(trackList, gr = gr, viewerStyle = viewerStyle)
+  trackViewer::addGuideLine(region, vp = vp)
 }
 
 
@@ -366,11 +411,9 @@ cre_h3k27ac_area_plot <- function(
   #  cre_name <- "CRE_8366_WT1"
   #  maxy <- 45
   #  col <- "red"
-  #  dir <- "/lustre/home/acct-medkkw/medlyb/project/15.APL_TF_ChIPseq/08.MYC_4C/02.bdg_unfold/"
   # region <- c()
   result <- list()
   tmp.ls <- lapply(h3k27ac.list, function(x) {
-    #    tmp.bdg <- read.table(paste0("/lustre/home/acct-medkkw/medlyb/project/20.APL_AC_ChIPseq/10.CRE_h3k27ac_signal/",cre_name,"/",x,"_H3K27ac.",cre_name,".unfold.bed"), header = FALSE)
     tmp.bdg <- read.table(
       paste0(dir, cre_name, "/", x, "_signal.", cre_name, ".unfold.bed"),
       header = FALSE
@@ -417,11 +460,10 @@ ChIPseq_heatmap_plot <- function(
   file.input,
   brew.color = "Oranges",
   max = 10,
-  filename = "~/tmp.png",
+  filename = "ChIPseq_heatmap.png",
   width = 2,
   height = 10
 ) {
-  #  file.input <- c("/lustre/home/acct-medkkw/medlyb/wl_proj/APL_H3K27ac_WangLab/09.APL_CD34_process/heatmap/CHH_H3K27ac_peaks.APL_CD34.heatmap.txt","/lustre/home/acct-medkkw/medlyb/wl_proj/APL_H3K27ac_WangLab/09.APL_CD34_process/heatmap/CHH_H3K27ac_peaks.APL_uniq.heatmap.txt","/lustre/home/acct-medkkw/medlyb/wl_proj/APL_H3K27ac_WangLab/09.APL_CD34_process/heatmap/CHH_H3K27ac_peaks.CD34_uniq.heatmap.txt")
   heatmap.df.1 <- read.table(
     file.input[1],
     header = TRUE,
@@ -444,14 +486,12 @@ ChIPseq_heatmap_plot <- function(
   heatmap.df.1 <- heatmap_sort(heatmap.df.1)
   heatmap.df.2 <- heatmap_sort(heatmap.df.2)
   heatmap.df.3 <- heatmap_sort(heatmap.df.3)
-  #library(pheatmap)
   heatmap.df.order <- rbind(heatmap.df.1, heatmap.df.2, heatmap.df.3)
   bin_num <- (ncol(heatmap.df.order) - 2)
   heatmap.df.order <- as.matrix(heatmap.df.order[, 1:bin_num + 1])
   heatmap.df.order <- log2(heatmap.df.order + 1)
   heatmap.df.order[heatmap.df.order > max] <- max
-  #png("~/tmp.png",width = 1000,height = 5000)
-  pheatmap(
+  pheatmap::pheatmap(
     heatmap.df.order,
     kmeans_k = NA,
     scale = "none",
@@ -472,5 +512,3 @@ ChIPseq_heatmap_plot <- function(
   )
   #dev.off()
 }
-
-

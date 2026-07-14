@@ -223,7 +223,7 @@ DESeq2_DEG_extract <- function(
     col_anno_color <- list(Group = c("#A81E2C", "#08537C"))
     names(col_anno_color$Group) <- levels(col_anno$Group)
 
-    EX_data <- assay(result.df$vsd[c(
+    EX_data <- SummarizedExperiment::assay(result.df$vsd[c(
       result.df$up$Row.names,
       result.df$dw$Row.names
     )])

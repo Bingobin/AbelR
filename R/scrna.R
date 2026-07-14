@@ -53,14 +53,20 @@ SCT_METHOD_V3 <- function(
     maxSize_GB = 35,
     verbose = FALSE
 ){
+  old_max_size <- getOption("future.globals.maxSize")
+  on.exit(options(future.globals.maxSize = old_max_size), add = TRUE)
   options(future.globals.maxSize = maxSize_GB * 1024^3)
+
+  if (max(dims) > npcs) {
+    stop("max(dims) must be less than or equal to npcs.")
+  }
   
   # ensure SampleID
   seu$SampleID <- factor(seu$SampleID)
   
   # RNA layers: join then split by SampleID
   if (join_layers) {
-    seu[["RNA"]] <- JoinLayers(seu[["RNA"]])
+    seu[["RNA"]] <- SeuratObject::JoinLayers(seu[["RNA"]])
   }
   seu[["RNA"]] <- split(seu[["RNA"]], f = seu$SampleID)
   
@@ -76,9 +82,7 @@ SCT_METHOD_V3 <- function(
   DefaultAssay(seu) <- "SCT"
   
   # PCA
-  seu <- RunPCA(seu, npcs = max(dims), verbose = verbose, assay = "SCT")
-  # 说明：用 max(dims) 保证后面 dims 有足够PC；你也可用 npcs 参数
-  # 若你想严格用 npcs，可改成 RunPCA(..., npcs = npcs) 并确保 max(dims) <= npcs
+  seu <- RunPCA(seu, npcs = npcs, verbose = verbose, assay = "SCT")
   
   # Integration
   seu <- IntegrateLayers(
@@ -112,7 +116,13 @@ SCT_METHOD_V3 <- function(
 }
 
 
-scTYPE_annotation <- function(scRNA_object, assay, tissue = "Immune system") {
+scTYPE_annotation <- function(
+    scRNA_object,
+    assay,
+    tissue = "Immune system",
+    sctype_dir = getOption("AbelR.sctype_dir"),
+    db_file = NULL
+) {
   #  scRNA_object <- pbmc.combined.sct
   #  assay <- "integrated"
   # tissue = "Immune system"
@@ -140,34 +150,41 @@ scTYPE_annotation <- function(scRNA_object, assay, tissue = "Immune system") {
     "#1f78b4",
     "#a6cee3"
   )
-  lapply(c("dplyr", "Seurat", "HGNChelper"), library, character.only = T)
-  source("~/Bin/scTYPE/gene_sets_prepare.R")
-  source("~/Bin/scTYPE/sctype_score_.R")
-  db_ <- "~/Bin/scTYPE/ScTypeDB_full.xlsx"
-
-  gs_list <- gene_sets_prepare(db_, tissue)
-  if (assay == "integrated") {
-    ex.max <- sctype_score(
-      scRNAseqData = scRNA_object@assays$integrated@scale.data,
-      scale = TRUE,
-      gs = gs_list$gs_positive,
-      gs2 = gs_list$gs_negative
-    )
-  } else if (assay == "RNA") {
-    ex.max <- sctype_score(
-      scRNAseqData = scRNA_object@assays$RNA@scale.data,
-      scale = TRUE,
-      gs = gs_list$gs_positive,
-      gs2 = gs_list$gs_negative
-    )
-  } else if (assay == "SCT") {
-    ex.max <- sctype_score(
-      scRNAseqData = scRNA_object@assays$SCT@scale.data,
-      scale = TRUE,
-      gs = gs_list$gs_positive,
-      gs2 = gs_list$gs_negative
+  if (is.null(sctype_dir) || !nzchar(sctype_dir)) {
+    stop(
+      "Set sctype_dir or options(AbelR.sctype_dir = '/path/to/scTYPE')."
     )
   }
+  prepare_file <- file.path(sctype_dir, "gene_sets_prepare.R")
+  score_file <- file.path(sctype_dir, "sctype_score_.R")
+  if (is.null(db_file)) {
+    db_file <- file.path(sctype_dir, "ScTypeDB_full.xlsx")
+  }
+  required_files <- c(prepare_file, score_file, db_file)
+  if (any(!file.exists(required_files))) {
+    stop(
+      "Missing scType file(s): ",
+      paste(required_files[!file.exists(required_files)], collapse = ", ")
+    )
+  }
+  source(prepare_file, local = environment())
+  source(score_file, local = environment())
+
+  if (!assay %in% names(scRNA_object@assays)) {
+    stop("Assay not found in scRNA_object: ", assay)
+  }
+  gs_list <- gene_sets_prepare(db_file, tissue)
+  scale_data <- Seurat::GetAssayData(
+    scRNA_object,
+    assay = assay,
+    layer = "scale.data"
+  )
+  ex.max <- sctype_score(
+    scRNAseqData = scale_data,
+    scale = TRUE,
+    gs = gs_list$gs_positive,
+    gs2 = gs_list$gs_negative
+  )
   CL_results <- do.call(
     "rbind",
     lapply(unique(scRNA_object@meta.data$seurat_clusters), function(cl) {
@@ -260,5 +277,3 @@ scTYPE_annotation <- function(scRNA_object, assay, tissue = "Immune system") {
 
   return(result)
 }
-
-

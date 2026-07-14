@@ -16,11 +16,11 @@ Build_CellChat_object <- function(
     verbose = TRUE
 ) {
   species <- match.arg(species)
-  suppressPackageStartupMessages({
-    library(Seurat)
-    library(CellChat)
-    library(future)
-  })
+  for (pkg in c("Seurat", "CellChat", "future")) {
+    if (!requireNamespace(pkg, quietly = TRUE)) {
+      stop("Package '", pkg, "' is required for Build_CellChat_object().")
+    }
+  }
   if (!group.by %in% colnames(seu@meta.data)) {
     stop("group.by column not found in seu@meta.data: ", group.by)
   }
@@ -30,7 +30,7 @@ Build_CellChat_object <- function(
   if (!is.null(cluster.by) && !cluster.by %in% colnames(seu@meta.data)) {
     stop("cluster.by column not found in seu@meta.data: ", cluster.by)
   }
-  data.input <- GetAssayData(
+  data.input <- Seurat::GetAssayData(
     seu,
     assay = assay,
     layer = layer
@@ -52,41 +52,43 @@ Build_CellChat_object <- function(
     message("Number of groups: ", length(unique(meta$labels)))
     print(table(meta$labels))
   }
-  cellchat <- createCellChat(
+  cellchat <- CellChat::createCellChat(
     object = data.input,
     meta = meta,
     group.by = "labels"
   )
   if (species == "human") {
-    cellchat@DB <- CellChatDB.human
+    cellchat@DB <- getExportedValue("CellChat", "CellChatDB.human")
   } else {
-    cellchat@DB <- CellChatDB.mouse
+    cellchat@DB <- getExportedValue("CellChat", "CellChatDB.mouse")
   }
-  cellchat <- subsetData(cellchat)
+  cellchat <- CellChat::subsetData(cellchat)
+  old_max_size <- getOption("future.globals.maxSize")
+  old_plan <- future::plan()
+  on.exit(options(future.globals.maxSize = old_max_size), add = TRUE)
+  on.exit(future::plan(old_plan), add = TRUE)
   if (use_parallel) {
     options(future.globals.maxSize = maxSize)
     future::plan(future::multisession, workers = workers)
   } else {
     future::plan(future::sequential)
   }
-  cellchat <- identifyOverExpressedGenes(cellchat)
-  cellchat <- identifyOverExpressedInteractions(cellchat)
-  cellchat <- computeCommunProb(
+  cellchat <- CellChat::identifyOverExpressedGenes(cellchat)
+  cellchat <- CellChat::identifyOverExpressedInteractions(cellchat)
+  cellchat <- CellChat::computeCommunProb(
     cellchat,
     type = type
   )
-  cellchat <- filterCommunication(
+  cellchat <- CellChat::filterCommunication(
     cellchat,
     min.cells = min.cells
   )
-  cellchat <- computeCommunProbPathway(cellchat)
-  cellchat <- aggregateNet(cellchat)
-  cellchat <- netAnalysis_computeCentrality(
+  cellchat <- CellChat::computeCommunProbPathway(cellchat)
+  cellchat <- CellChat::aggregateNet(cellchat)
+  cellchat <- CellChat::netAnalysis_computeCentrality(
     cellchat,
     slot.name = "netP"
   )
-  future::plan(future::sequential)
   return(cellchat)
 }
-
 

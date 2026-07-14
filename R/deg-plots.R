@@ -38,7 +38,7 @@ plot_deg_heatmap_for_DEGseq2 <- function(
   )
   names(col_anno_color$Group) <- levels(col_anno$Group)
 
-  EX_data <- assay(deg_result$vsd[deg_genes, ])
+  EX_data <- SummarizedExperiment::assay(deg_result$vsd[deg_genes, ])
   sd_rows <- apply(EX_data, 1, sd)
   EX_data <- EX_data[sd_rows > 0, , drop = FALSE]
   if (nrow(EX_data) < 2) {
@@ -400,11 +400,9 @@ plot_deg_comparison <- function(
   top = 5,
   label_size = 2.5
 ) {
-  # 加载必需的包
-  require(dplyr)
-  require(ggplot2)
-  require(ggrastr)
-  require(ggrepel)
+  if (!requireNamespace("ggrepel", quietly = TRUE)) {
+    stop("Package 'ggrepel' is required for plot_deg_comparison().")
+  }
 
   # 选择P值列名
   pval_col <- if (adjust) "padj" else "pvalue"
@@ -602,7 +600,7 @@ plot_deg_comparison <- function(
     xlab(label_1) +
     ylab(label_2) +
     # 基因名标注
-    geom_text_repel(
+    ggrepel::geom_text_repel(
       aes(label = GOI, color = Group2),
       show.legend = FALSE,
       fontface = "bold",
@@ -643,11 +641,13 @@ plot_deg_manhattan <- function(
     deg_list,
     color_map,
     species = c("mouse", "human"),
-    deg_cols = c("Symbol", "log2FoldChange", "pvalue", "padj"),
+    deg_cols = NULL,
     symbol_col = "Symbol",
     lfc_col = "log2FoldChange",
     p_col = "pvalue",
     padj_col = "padj",
+    gene_anno_file = NULL,
+    chromosome_lengths = NULL,
     gene_type_filter = "protein_coding",
     remove_rik = TRUE,
     top_n = 10,
@@ -657,41 +657,32 @@ plot_deg_manhattan <- function(
 ) {
   species <- match.arg(species)
   
-  ## required packages
-  require(dplyr)
-  require(ggplot2)
-  require(ggrepel)
-  require(ggrastr)
-  
-  ## species-specific genome
+  if (!requireNamespace("ggrepel", quietly = TRUE)) {
+    stop("Package 'ggrepel' is required for plot_deg_manhattan().")
+  }
+
   if (species == "mouse") {
-    gene_anno_file <- "~/database/GRCm39/gene_len.vM38.txt"
-    require(BSgenome.Mmusculus.UCSC.mm39)
-    bsgenome_obj <- BSgenome.Mmusculus.UCSC.mm39::BSgenome.Mmusculus.UCSC.mm39
     if (is.null(chr_keep)) {
       chr_keep <- c(paste0("chr", 1:19), "chrX", "chrY")
     }
   } else if (species == "human") {
-    gene_anno_file <- "~/database/GENCODE/gene_len.v43.new.txt"
-    require(BSgenome.Hsapiens.UCSC.hg38)
-    bsgenome_obj <- BSgenome.Hsapiens.UCSC.hg38::BSgenome.Hsapiens.UCSC.hg38
     if (is.null(chr_keep)) {
       chr_keep <- c(paste0("chr", 1:22), "chrX", "chrY")
     }
   }
-  
-  ## check deg_cols
-  if (length(deg_cols) != 4) {
-    stop("deg_cols must contain exactly 4 column names: Symbol, log2FoldChange, pvalue, padj")
+
+  if (!is.null(deg_cols)) {
+    if (length(deg_cols) != 4) {
+      stop("deg_cols must contain exactly four column names.")
+    }
+    symbol_col <- deg_cols[1]
+    lfc_col <- deg_cols[2]
+    p_col <- deg_cols[3]
+    padj_col <- deg_cols[4]
   }
-  
-  symbol_col <- deg_cols[1]
-  lfc_col    <- deg_cols[2]
-  p_col      <- deg_cols[3]
-  padj_col   <- deg_cols[4]
-  
-  ## read gene annotation
-  gene_anno <- read.table(gene_anno_file, header = TRUE, sep = "\t", check.names = FALSE)
+  deg_cols <- c(symbol_col, lfc_col, p_col, padj_col)
+
+  gene_anno <- .abel_gene_annotation(species, gene_anno_file)
   
   required_anno_cols <- c("Symbol", "Chr", "Start")
   missing_anno <- setdiff(required_anno_cols, colnames(gene_anno))
@@ -699,10 +690,22 @@ plot_deg_manhattan <- function(
     stop("gene_anno_file is missing required columns: ", paste(missing_anno, collapse = ", "))
   }
   
-  seqlen <- GenomeInfoDb::seqlengths(bsgenome_obj)[chr_keep]
-  seqlen <- seqlen[!is.na(seqlen)]
-  offset <- c(0, cumsum(as.numeric(seqlen))[-length(seqlen)])
-  names(offset) <- names(seqlen)
+  if (is.null(chromosome_lengths)) {
+    end_col <- if ("End" %in% colnames(gene_anno)) "End" else "Start"
+    chromosome_lengths <- tapply(
+      gene_anno[[end_col]],
+      gene_anno$Chr,
+      max,
+      na.rm = TRUE
+    )
+  }
+  chromosome_lengths <- chromosome_lengths[chr_keep]
+  chromosome_lengths <- chromosome_lengths[!is.na(chromosome_lengths)]
+  if (!length(chromosome_lengths)) {
+    stop("No chromosome lengths are available for chr_keep.")
+  }
+  offset <- c(0, head(cumsum(as.numeric(chromosome_lengths)), -1))
+  names(offset) <- names(chromosome_lengths)
   
   gene_anno <- gene_anno %>%
     mutate(
