@@ -1,5 +1,31 @@
 # Functions for deseq2 analyses.
 
+#' Run a filtered two-group DESeq2 analysis
+#'
+#' Selects treatment and control samples from a shared design table, fits a
+#' DESeq2 model, joins human or mouse gene annotation and optional TPM values,
+#' and calculates a variance-stabilized expression object.
+#'
+#' @param count.matrix Count data frame with a `GID` column and sample columns.
+#' @param tpm.matrix Optional TPM data frame using the same `GID` and sample
+#'   columns as `count.matrix`.
+#' @param design.df Sample metadata whose row names match matrix sample columns.
+#'   It must contain `Group`, `Batch`, and `Library`.
+#' @param library,batch,tr,ctr Values selecting one library, batch, treatment
+#'   group, and control group when custom filters are not supplied.
+#' @param tr_filter,ctr_filter Optional named lists defining treatment and
+#'   control samples from arbitrary columns in `design.df`.
+#' @param tr_name,ctr_name Optional display names for the resulting contrast
+#'   groups.
+#' @param species Species used for annotation and ID conversion; `"human"` or
+#'   `"mouse"`.
+#' @param gene_anno_file Optional annotation table (`.txt` or `.txt.gz`). When
+#'   `NULL`, AbelR uses its bundled species-specific annotation.
+#'
+#' @return A list containing DESeq2 coefficient names (`inter`), the annotated
+#'   result table (`result`), the variance-stabilized object (`vsd`), selected
+#'   sample metadata (`design`), and normalized `species`.
+#' @export
 DESeq2_DEG_analysis_batch <- function(
   count.matrix,
   tpm.matrix = NULL,
@@ -169,6 +195,23 @@ DESeq2_DEG_analysis_batch <- function(
 }
 
 
+#' Run a two-group DESeq2 analysis
+#'
+#' Convenience interface to [DESeq2_DEG_analysis_batch()] that selects samples
+#' using only the `Group` column while retaining the standard AbelR matrix and
+#' metadata schema.
+#'
+#' @param count.matrix Count data frame with a `GID` column and sample columns.
+#' @param tpm.matrix Optional TPM data frame with the same identifiers and sample
+#'   columns.
+#' @param design.df Sample metadata with row names matching sample columns and
+#'   required `Group`, `Batch`, and `Library` columns.
+#' @param tr,ctr Treatment and control values from `design.df$Group`.
+#' @param species Species used for gene annotation; `"human"` or `"mouse"`.
+#' @param gene_anno_file Optional custom annotation table.
+#'
+#' @return The result list returned by [DESeq2_DEG_analysis_batch()].
+#' @export
 DESeq2_DEG_analysis <- function(
   count.matrix,
   tpm.matrix = NULL,
@@ -192,6 +235,25 @@ DESeq2_DEG_analysis <- function(
 }
 
 
+#' Extract significant genes from an AbelR DESeq2 result
+#'
+#' Divides a DESeq2 result into upregulated and downregulated tables using fold
+#' change and significance thresholds and optionally constructs a scaled
+#' variance-stabilized heatmap.
+#'
+#' @param result.df Result list returned by [DESeq2_DEG_analysis()] or
+#'   [DESeq2_DEG_analysis_batch()].
+#' @param design.df Sample metadata containing `SampleID` and `Group`, used for
+#'   heatmap annotation.
+#' @param plot Logical; create and store a heatmap.
+#' @param adjust Logical; use adjusted P values when `TRUE`, otherwise raw
+#'   P values.
+#' @param fc Fold-change threshold on the linear scale.
+#' @param pv Significance threshold.
+#'
+#' @return The input result list with `up` and `dw` tables and, when requested,
+#'   a `plot` component containing the pheatmap result.
+#' @export
 DESeq2_DEG_extract <- function(
   result.df,
   design.df,
@@ -262,6 +324,21 @@ DESeq2_DEG_extract <- function(
 }
 
 
+#' Compare fold changes from two DESeq2 analyses
+#'
+#' Merges two annotated DESeq2 result tables, calculates their Pearson
+#' correlation and regression slope, identifies concordant upregulated and
+#' downregulated genes, and labels selected or top-ranked genes.
+#'
+#' @param deg1.df,deg2.df Annotated DESeq2 result data frames generated with a
+#'   compatible AbelR result layout.
+#' @param label1,label2 Axis labels identifying the two comparisons.
+#' @param gene.list Character vector of gene symbols to label.
+#' @param fc Fold-change threshold on the linear scale.
+#' @param top Number of top concordant genes to add from each direction.
+#'
+#' @return A [ggplot2::ggplot] comparison plot.
+#' @export
 Compare_pairwise_Deseq2 <- function(
   deg1.df,
   deg2.df,

@@ -1,5 +1,16 @@
 # Functions for scrna analyses.
 
+#' Integrate Seurat objects with the SCT workflow
+#'
+#' Applies SCTransform to a list of Seurat objects, identifies integration
+#' features and anchors, integrates the data, and runs scaling, PCA, UMAP,
+#' neighbour finding, and clustering.
+#'
+#' @param object_list A list of Seurat objects to integrate.
+#'
+#' @return An integrated Seurat object with PCA, UMAP, neighbour graph, and
+#'   clustering results.
+#' @export
 scRNA_SCT_norm <- function(object_list) {
   mut.list <- lapply(X = object_list, FUN = SCTransform)
   features <- SelectIntegrationFeatures(
@@ -30,6 +41,32 @@ scRNA_SCT_norm <- function(object_list) {
 }
 
 
+#' Run Seurat v5 SCT and RPCA integration
+#'
+#' Normalizes a layered Seurat object with SCTransform, performs PCA and RPCA
+#' layer integration, constructs a shared-nearest-neighbour graph, clusters the
+#' cells, and calculates a UMAP embedding.
+#'
+#' @param seu A Seurat object containing a `SampleID` metadata column.
+#' @param var_features_n Number of variable features retained by SCTransform.
+#' @param sct_method SCTransform fitting method, such as `"glmGamPoi"`.
+#' @param npcs Number of principal components to calculate.
+#' @param dims Principal-component dimensions used for integration, neighbours,
+#'   and UMAP. `max(dims)` must not exceed `npcs`.
+#' @param k.anchor Number of anchors used by RPCA integration.
+#' @param k.weight Number of neighbours used when weighting anchors.
+#' @param resolution Clustering resolution.
+#' @param umap_n_neighbors Number of UMAP neighbours.
+#' @param umap_min_dist Minimum UMAP distance.
+#' @param umap_spread UMAP spread parameter.
+#' @param join_layers Logical; join existing RNA layers before splitting them by
+#'   `SampleID`.
+#' @param maxSize_GB Maximum future global size in gigabytes.
+#' @param verbose Logical; show progress from Seurat functions.
+#'
+#' @return The processed Seurat object with an `integrated.dr` reduction,
+#'   clusters, and UMAP coordinates.
+#' @export
 SCT_METHOD_V3 <- function(
     seu,
     # SCTransform / PCA
@@ -116,6 +153,24 @@ SCT_METHOD_V3 <- function(
 }
 
 
+#' Annotate Seurat clusters with scType
+#'
+#' Loads the scType marker database and scoring scripts, scores positive and
+#' negative marker sets, selects the highest-scoring cell type for each Seurat
+#' cluster, and stores the annotation in `customclassif` metadata.
+#'
+#' @param scRNA_object A Seurat object containing scaled assay data and a
+#'   `seurat_clusters` metadata column.
+#' @param assay Assay whose `scale.data` layer is used for scoring.
+#' @param tissue Tissue category present in the scType marker database.
+#' @param sctype_dir Directory containing `gene_sets_prepare.R`,
+#'   `sctype_score_.R`, and, by default, `ScTypeDB_full.xlsx`. It may also be set
+#'   with `options(AbelR.sctype_dir = "/path/to/scTYPE")`.
+#' @param db_file Optional explicit path to the scType marker database file.
+#'
+#' @return A list containing the annotated `scRNA_object`, the colour vector
+#'   `ccolss`, per-cluster `sctype_scores`, and the complete `CL_results` table.
+#' @export
 scTYPE_annotation <- function(
     scRNA_object,
     assay,

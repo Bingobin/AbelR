@@ -1,5 +1,20 @@
 # Functions for deg-plots analyses.
 
+#' Draw a heatmap of DESeq2 differentially expressed genes
+#'
+#' Extracts variance-stabilized expression for significant genes, scales each
+#' gene across samples, labels selected and top-ranked genes, and draws a
+#' ComplexHeatmap with sample-group annotation.
+#'
+#' @param deg_result AbelR DESeq2 result list containing `result`, `vsd`, and
+#'   `design` components.
+#' @param sample_name Character vector specifying the sample column order.
+#' @param label_genes Optional gene symbols to label in addition to top genes.
+#' @param top_n Number of top upregulated and downregulated genes to label.
+#'
+#' @return Invisibly returns the [ComplexHeatmap::Heatmap] object after drawing
+#'   it on the active graphics device.
+#' @export
 plot_deg_heatmap_for_DEGseq2 <- function(
   deg_result,
   sample_name,
@@ -164,6 +179,21 @@ plot_deg_heatmap_for_DEGseq2 <- function(
 }
 
 
+#' Select genes retained in a DESeq2 volcano plot
+#'
+#' Combines all significant genes, a random background sample, and explicitly
+#' requested genes into the set used by [volcano_plot_Deseq2()].
+#'
+#' @param deseq2_result.df Annotated DESeq2 result data frame containing
+#'   `Symbol`, `log2FoldChange`, and `padj`.
+#' @param gene.list Character vector of gene symbols that must be retained.
+#' @param n Number of nonsignificant background genes to sample.
+#' @param pc Logical; restrict candidates to protein-coding genes.
+#' @param pv Adjusted P-value threshold.
+#' @param fc Fold-change threshold on the linear scale.
+#'
+#' @return A character vector of selected gene symbols.
+#' @export
 target_for_volcano <- function(
   deseq2_result.df,
   gene.list,
@@ -189,6 +219,34 @@ target_for_volcano <- function(
 }
 
 
+#' Draw a volcano plot from DESeq2 results
+#'
+#' Creates a volcano plot from a DESeq2 result table, classifies significantly
+#' upregulated and downregulated genes, and labels selected genes together with
+#' the most significant genes in each direction.
+#'
+#' @param deseq2_result.df A data frame containing at least `Symbol`,
+#'   `log2FoldChange`, `pvalue`, and `padj` columns. A `Gene_Type` column is
+#'   also required when `pc = TRUE`.
+#' @param gene.list A character vector of gene symbols that should be retained
+#'   and labelled in the plot.
+#' @param n Number of nonsignificant background genes sampled for plotting.
+#' @param pc Logical; if `TRUE`, restrict candidate genes to those with
+#'   `Gene_Type == "protein_coding"`.
+#' @param pv P-value or adjusted P-value threshold used to define significance.
+#' @param fc Fold-change threshold on the linear scale. Vertical reference lines
+#'   are drawn at `+/-log2(fc)`.
+#' @param max_x Maximum absolute log2 fold change displayed. More extreme values
+#'   are capped at this limit.
+#' @param max_y Maximum displayed `-log10` significance value.
+#' @param top Number of the most significant genes to label in each fold-change
+#'   direction.
+#' @param adjust Logical; use `padj` when `TRUE` and `pvalue` when `FALSE`.
+#'
+#' @return A [ggplot2::ggplot] object.
+#'
+#' @seealso [target_for_volcano()]
+#' @export
 volcano_plot_Deseq2 <- function(
   deseq2_result.df,
   gene.list,
@@ -293,6 +351,23 @@ volcano_plot_Deseq2 <- function(
 }
 
 
+#' Draw a volcano plot from single-cell marker results
+#'
+#' Classifies Seurat marker genes by adjusted P value and average log2 fold
+#' change, caps extreme display values, and labels requested and top-ranked
+#' genes.
+#'
+#' @param findmarkers.df Marker data frame containing `Symbol`, `avg_log2FC`,
+#'   `p_val_adj`, and `pct.1` columns.
+#' @param gene.list Character vector of gene symbols to label.
+#' @param pv Adjusted P-value threshold.
+#' @param fc Fold-change threshold on the linear scale.
+#' @param top Number of top upregulated and downregulated genes to label.
+#' @param max_x Maximum absolute average log2 fold change displayed.
+#' @param max_y Maximum displayed `-log10(p_val_adj)` value.
+#'
+#' @return A [ggplot2::ggplot] object.
+#' @export
 volcano_plot_scRNA <- function(
   findmarkers.df,
   gene.list,
@@ -382,6 +457,30 @@ volcano_plot_scRNA <- function(
 }
 
 
+#' Compare two differential-expression analyses
+#'
+#' Merges two DEG result tables by gene identifier, classifies concordant and
+#' discordant fold-change patterns, optionally samples background genes, and
+#' draws a correlation plot with selected labels.
+#'
+#' @param deg_result1,deg_result2 DEG result data frames containing compatible
+#'   identifiers, fold changes, and P-value columns.
+#' @param label_1,label_2 Axis labels for the two analyses.
+#' @param fc Fold-change threshold on the linear scale.
+#' @param pv Significance threshold.
+#' @param adjust Logical; compare `padj` when `TRUE`, otherwise `pvalue`.
+#' @param pc Logical; restrict the first result to protein-coding genes.
+#' @param bg_num Maximum number of background genes sampled for display.
+#' @param limit Maximum absolute axis limit.
+#' @param seed Random seed used for background sampling.
+#' @param show_cor Logical; display correlation statistics.
+#' @param plot_title Optional plot title.
+#' @param goi Optional character vector of genes of interest to label.
+#' @param top Number of top genes labelled for each comparison group.
+#' @param label_size Text size for gene labels.
+#'
+#' @return A [ggplot2::ggplot] comparison plot.
+#' @export
 plot_deg_comparison <- function(
   deg_result1,
   deg_result2,
@@ -637,6 +736,33 @@ plot_deg_comparison <- function(
 }
 
 
+#' Draw genomic-position DEG Manhattan plots
+#'
+#' Joins one or more DEG tables to human or mouse gene coordinates, calculates
+#' a signed significance score (`log2FoldChange * -log10(padj)`), and draws
+#' faceted genomic-position plots with top-gene labels.
+#'
+#' @param deg_list Named list of DEG data frames, one per treatment or contrast.
+#' @param color_map Named colour vector whose names match `deg_list`.
+#' @param species Species defining bundled annotation and default chromosomes.
+#' @param deg_cols Optional four-column character vector overriding
+#'   `symbol_col`, `lfc_col`, `p_col`, and `padj_col`.
+#' @param symbol_col,lfc_col,p_col,padj_col Column names containing gene symbol,
+#'   log2 fold change, raw P value, and adjusted P value.
+#' @param gene_anno_file Optional compatible gene-annotation table. Bundled
+#'   annotation is used when `NULL`.
+#' @param chromosome_lengths Optional named numeric vector of chromosome lengths.
+#'   Annotation maxima are used when `NULL`.
+#' @param gene_type_filter Optional gene type retained when `Gene_Type` exists.
+#' @param remove_rik Logical; remove mouse symbols ending in `Rik`.
+#' @param top_n Number of genes labelled per treatment.
+#' @param cap_value Maximum absolute signed significance score displayed.
+#' @param chr_keep Optional chromosomes and order to retain.
+#' @param facet_nrow Number of rows in the treatment facet layout.
+#'
+#' @return A list with the joined data (`deg_merge`), labelled genes
+#'   (`top_genes`), and the [ggplot2::ggplot] object (`plot`).
+#' @export
 plot_deg_manhattan <- function(
     deg_list,
     color_map,

@@ -1,5 +1,18 @@
 # Functions for chipseq analyses.
 
+#' Plot ranked enhancer signals
+#'
+#' Draws enhancer signal against rank for one sample, marks the super-enhancer
+#' boundary, and labels selected genes and the highest-ranked enhancers.
+#'
+#' @param label Character vector of nearby gene symbols to label.
+#' @param sample Sample name selected from `rank.df$Sample`.
+#' @param top Number of top-ranked enhancers to label.
+#' @param rank.df Data frame containing `Sample`, `Signal`, `Type`, `Rank`, and
+#'   `CLOSEST_GENE` columns.
+#'
+#' @return A [ggplot2::ggplot] object.
+#' @export
 enhancer_rank_plot <- function(label, sample, top, rank.df) {
   ###############################################
   #  Sample    Signal Type Rank CLOSEST_GENE
@@ -85,6 +98,19 @@ enhancer_rank_plot <- function(label, sample, top, rank.df) {
 }
 
 
+#' Compare gene expression across risk groups
+#'
+#' Combines disease risk-group expression with normal-sample expression and
+#' draws log2 TPM boxplots with pairwise statistical comparisons.
+#'
+#' @param gene Gene symbol to plot.
+#' @param risk.df Risk-model data frame containing the gene-expression column,
+#'   risk group, and mutation columns used by the function.
+#' @param nm.df Normal-sample expression table containing `Symbol` and sample
+#'   expression columns.
+#'
+#' @return A [ggplot2::ggplot] object.
+#' @export
 expression_boxplot_byMut <- function(gene, risk.df, nm.df) {
   #  gene <- "CHRNE"
   #  risk.df <- rs.df.clinc.beat
@@ -136,6 +162,17 @@ expression_boxplot_byMut <- function(gene, risk.df, nm.df) {
 }
 
 
+#' Plot HOMER peak annotation proportions
+#'
+#' Extracts broad genomic feature categories from a HOMER `Annotation` column,
+#' calculates category frequencies, and draws a labelled pie chart.
+#'
+#' @param peak_anno.df HOMER annotation data frame containing `Annotation`.
+#' @param color Colour vector used for genomic feature categories.
+#' @param prefix Plot title.
+#'
+#' @return A ggpubr pie-chart object.
+#' @export
 peak_pieplot_byhomer <- function(
   peak_anno.df,
   color = brewer.pal(12, "Paired")[c(1, 2, 3, 4, 5, 7, 8, 9)],
@@ -180,6 +217,25 @@ peak_pieplot_byhomer <- function(
 }
 
 
+#' Export an ordered HOMER signal heatmap
+#'
+#' Orders a peak-centred signal matrix by gene or region identifiers, applies a
+#' `log2(x + 1)` transformation and upper cap, and writes a heatmap and separate
+#' legend image.
+#'
+#' @param heatmap.df Data frame whose first column is `Gene` and remaining
+#'   columns are ordered signal bins.
+#' @param order.list Character vector defining row order.
+#' @param color High-value heatmap colour.
+#' @param max Maximum transformed signal value.
+#' @param prefix Filename and legend title prefix.
+#' @param filedir Output directory.
+#' @param width,height Output heatmap dimensions in inches.
+#' @param gaps Row positions at which gaps are drawn.
+#'
+#' @return Invisibly returns the result of the final [pheatmap::pheatmap()] call;
+#'   heatmap files are written to `filedir`.
+#' @export
 peak_heatmap_byhomer <- function(
   heatmap.df,
   order.list,
@@ -233,6 +289,22 @@ peak_heatmap_byhomer <- function(
 }
 
 
+#' Visualize regulatory mutations with gene tracks
+#'
+#' Constructs human hg38 gene tracks for two genes, overlays mutation
+#' positions, and draws the selected regulatory interval with guide lines.
+#'
+#' @param chr Chromosome name such as `"chr11"`.
+#' @param region Numeric coordinates defining the displayed interval and guide
+#'   lines; the first and fourth values set the track range.
+#' @param mut_pos Numeric mutation positions.
+#' @param tf_name Character vector of two human gene symbols.
+#' @param num Reserved numeric mutation-count input retained by the current
+#'   interface.
+#'
+#' @return The value returned by [trackViewer::addGuideLine()], invisibly used
+#'   for its plotting side effect.
+#' @export
 track_view_cre_mut <- function(chr, region, mut_pos, tf_name, num) {
   #  chr <- "chr11"
   #  region <- c(32387775,32418917,32426766,32458769)
@@ -296,6 +368,25 @@ track_view_cre_mut <- function(chr, region, mut_pos, tf_name, num) {
 }
 
 
+#' Plot genomic signal tracks around a region of interest
+#'
+#' Parses a genomic interval, adds a human hg38 gene track, imports BAM, BigWig,
+#' or BED signals listed in a metadata table, applies colours and optional axis
+#' limits, and draws the combined tracks.
+#'
+#' @param chrom Region string such as `"chr21:34,787,801-36,004,667"`.
+#' @param tf_name Gene symbol used for the annotation track.
+#' @param ylim Zero for automatic limits, one shared positive limit, or a vector
+#'   of per-signal limits.
+#' @param extend Number of bases added to both sides of the interval.
+#' @param info Data frame containing `ID` and one of `BAM_t`, `BW`, or `BED`,
+#'   according to `type`.
+#' @param type Input signal format: `"BAM"`, `"BigWig"`, or `"BED"`.
+#' @param color Colours interpolated across signal tracks.
+#'
+#' @return The value returned by [trackViewer::addGuideLine()], used primarily
+#'   for its plotting side effect.
+#' @export
 trackview_peak_roi <- function(
   chrom,
   tf_name,
@@ -400,6 +491,22 @@ trackview_peak_roi <- function(
 }
 
 
+#' Plot H3K27ac signal across a regulatory element
+#'
+#' Reads unfolded bedGraph-like signal files for multiple samples, caps extreme
+#' scores, calculates a median profile, and draws overlapping signal areas with
+#' selected genomic guide lines.
+#'
+#' @param cre_name Regulatory-element identifier and input subdirectory name.
+#' @param maxy Maximum displayed signal value.
+#' @param h3k27ac.list Character vector of sample names.
+#' @param color Colour vector used for sample signal areas.
+#' @param dir Parent directory containing the regulatory-element subdirectory.
+#' @param region Numeric genomic positions marked by vertical lines.
+#'
+#' @return A list containing the ggplot object (`plot`) and combined signal data
+#'   frame (`df`).
+#' @export
 cre_h3k27ac_area_plot <- function(
   cre_name,
   maxy,
@@ -442,6 +549,16 @@ cre_h3k27ac_area_plot <- function(
 }
 
 
+#' Sort a peak-centred heatmap by central signal density
+#'
+#' Calculates row sums across the central half of a binned signal matrix and
+#' orders rows from highest to lowest central density.
+#'
+#' @param heatmap.df Data frame containing signal-bin columns and one trailing
+#'   annotation column.
+#'
+#' @return The reordered data frame with an added `Center_density` column.
+#' @export
 heatmap_sort <- function(heatmap.df) {
   #heatmap.df<-heatmap.df.1
   bin_num <- (ncol(heatmap.df) - 1)
@@ -456,6 +573,22 @@ heatmap_sort <- function(heatmap.df) {
 }
 
 
+#' Export a combined ChIP-seq signal heatmap
+#'
+#' Reads three peak-centred signal matrices, sorts each by central density,
+#' combines them with row gaps, transforms and caps signal values, and exports a
+#' single heatmap image.
+#'
+#' @param file.input Character vector of exactly three tab-delimited matrix
+#'   paths.
+#' @param brew.color Name of an RColorBrewer palette.
+#' @param max Maximum `log2(x + 1)` signal displayed.
+#' @param filename Output image filename.
+#' @param width,height Output dimensions in inches.
+#'
+#' @return Invisibly returns the [pheatmap::pheatmap()] result; the heatmap is
+#'   written to `filename`.
+#' @export
 ChIPseq_heatmap_plot <- function(
   file.input,
   brew.color = "Oranges",

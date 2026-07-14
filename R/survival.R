@@ -1,5 +1,26 @@
 # Functions for survival analyses.
 
+#' Fit a multivariable Cox risk-score model
+#'
+#' Combines selected-gene expression with clinical features, fits or reuses a
+#' multivariable Cox model, calculates standardized sample risk scores, and
+#' divides samples into high- and low-risk groups at the median score.
+#'
+#' @param sample.list Character vector of sample identifiers to analyse.
+#' @param gene.list Character vector of gene symbols used as expression
+#'   predictors.
+#' @param feature.list Character vector of clinical or molecular feature columns
+#'   used as additional predictors.
+#' @param tpm.matrix Expression data frame containing a `Symbol` column and
+#'   sample columns.
+#' @param clinic.df Clinical data frame containing sample identifiers,
+#'   `overallSurvival`, `vitalStatus`, and the requested feature columns.
+#' @param cox.df Optional coefficient table containing at least `Feature` and
+#'   `Coefficient`. If `NULL`, coefficients are fitted from the input data.
+#'
+#' @return A list with `HR`, the Cox coefficient and hazard-ratio table, and
+#'   `Clinc`, the merged sample risk-score and clinical table.
+#' @export
 RiskScore_multivar_cox <- function(
   sample.list,
   gene.list,
@@ -102,6 +123,19 @@ RiskScore_multivar_cox <- function(
 }
 
 
+#' Calculate gene-based Cox risk groups
+#'
+#' Fits a univariable Cox model for each selected gene, combines the fitted
+#' coefficients into a sample risk score, standardizes the score, and assigns
+#' median-based risk groups.
+#'
+#' @param gene.list Character vector of gene-expression columns.
+#' @param design.df Data frame containing `SampleID`, `Time`, `Status`, and the
+#'   selected gene-expression columns.
+#'
+#' @return The input design data merged with `Risk_score`, `RS_norm`, and
+#'   `Risk_Group` columns.
+#' @export
 Risk_grouping_cox <- function(gene.list, design.df) {
   #gene.list<-risk_gene.list
   #design.df<-Risk_model.beat.df
@@ -144,6 +178,21 @@ Risk_grouping_cox <- function(gene.list, design.df) {
 }
 
 
+#' Prepare expression and survival data for risk modelling
+#'
+#' Extracts selected genes from an expression table, joins their expression to
+#' survival metadata, removes invalid survival records, and converts survival
+#' status to numeric event coding.
+#'
+#' @param gene.list Character vector of gene symbols to extract.
+#' @param design.df Survival metadata containing `SampleID`, `Time`, and
+#'   `Status`.
+#' @param tpm.df Expression data frame containing a `Symbol` column and sample
+#'   columns.
+#'
+#' @return A data frame with one row per matched sample, selected-gene
+#'   expression, numeric `Time`, and binary `Status`.
+#' @export
 Risk_model_df <- function(gene.list, design.df, tpm.df) {
   #gene.list <- risk_gene.list
   #design.df <- aml_design_TCGA
@@ -166,6 +215,16 @@ Risk_model_df <- function(gene.list, design.df, tpm.df) {
 }
 
 
+#' Plot risk scores and survival status
+#'
+#' Draws vertically aligned panels showing ranked risk scores and survival time
+#' or status for samples assigned to high- and low-risk groups.
+#'
+#' @param clinic_rs.df Data frame containing `Risk_score`, `Risk_Group`, `Time`,
+#'   and `vitalStatus` columns.
+#'
+#' @return A combined plot produced by [cowplot::plot_grid()].
+#' @export
 plot_survial_risk <- function(clinic_rs.df) {
   #clinic_rs.df<-rs.df.clinc
   blank <- theme(
@@ -237,6 +296,16 @@ plot_survial_risk <- function(clinic_rs.df) {
 }
 
 
+#' Plot time-dependent survival ROC curves
+#'
+#' Calculates survival ROC curves at one, three, and five years and displays
+#' their AUC values in a combined plot.
+#'
+#' @param risk.df Data frame containing survival `Time`, binary `Status`, and
+#'   `Risk_score` columns.
+#'
+#' @return A [ggplot2::ggplot] object containing the three ROC curves.
+#' @export
 plot_roc_curve <- function(risk.df) {
   #  risk.df <- rs.df.clinc
   #  risk.df$lp <- a
@@ -307,4 +376,3 @@ plot_roc_curve <- function(risk.df) {
       axis.line = element_blank()
     )
 }
-

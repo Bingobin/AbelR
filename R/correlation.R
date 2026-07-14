@@ -1,5 +1,17 @@
 # Functions for correlation analyses.
 
+#' Plot the correlation between two genes
+#'
+#' Extracts two genes from an expression table, applies `log2(x + 1)`, computes
+#' a Pearson correlation and linear regression, and draws a labelled scatter
+#' plot.
+#'
+#' @param EXdata Expression data frame with a `Symbol` column followed by sample
+#'   expression columns. The first three columns are treated as annotation.
+#' @param Gene1,Gene2 Gene symbols to compare.
+#'
+#' @return A [ggplot2::ggplot] object.
+#' @export
 ccor_paired_gene <- function(EXdata, Gene1, Gene2) {
   #  EXdata<-aml_all_tpm.matrix
   #  Gene1 <- "TET2"
@@ -60,6 +72,17 @@ ccor_paired_gene <- function(EXdata, Gene1, Gene2) {
 }
 
 
+#' Plot the correlation between two variables
+#'
+#' Computes a Pearson correlation and linear regression between two columns and
+#' colours samples by a grouping column.
+#'
+#' @param EXdata Data frame containing the variables and grouping column.
+#' @param obj1,obj2 Character column names of the variables to compare.
+#' @param Group Character name of the column used to colour points.
+#'
+#' @return A [ggplot2::ggplot] object.
+#' @export
 ccor_paired_obj <- function(EXdata, obj1, obj2, Group) {
   corr.df <- data.frame(
     obj1 = EXdata[, obj1],
@@ -110,5 +133,4 @@ ccor_paired_obj <- function(EXdata, obj1, obj2, Group) {
     ylab(obj1) +
     scale_color_manual(values = c("#08537C", "#A81E2C"))
 }
-
 

@@ -1,5 +1,29 @@
 # Functions for monocle3 analyses.
 
+#' Build a Monocle3 trajectory from a Seurat object
+#'
+#' Creates a Monocle3 cell-data set from a Seurat assay, preprocesses and
+#' optionally aligns it, reuses an existing Seurat UMAP embedding, learns a
+#' principal graph, and optionally orders cells from selected root clusters.
+#'
+#' @param seu A Seurat object providing counts and cell metadata.
+#' @param ref_seu Optional Seurat object providing the reference embedding. If
+#'   `NULL`, `seu` is used.
+#' @param assay Assay from which expression values are extracted.
+#' @param layer Assay layer containing the count matrix.
+#' @param reduction Name of the Seurat dimensional reduction to reuse.
+#' @param alignment_group Metadata column used by `monocle3::align_cds()`. Set
+#'   to `NULL` to skip alignment.
+#' @param seurat_cluster_col Metadata column containing cluster labels.
+#' @param root_clusters Optional cluster labels used to select trajectory root
+#'   cells. If `NULL`, cells are not ordered.
+#' @param num_dim Number of dimensions used during Monocle3 preprocessing.
+#' @param use_partition Logical passed to `monocle3::learn_graph()`.
+#' @param cluster_cells_first Logical; run `monocle3::cluster_cells()` before
+#'   graph learning.
+#'
+#' @return A Monocle3 `cell_data_set` object.
+#' @export
 run_monocle3_from_seurat_umap <- function(
     seu,
     ref_seu = NULL,
@@ -97,4 +121,3 @@ run_monocle3_from_seurat_umap <- function(
   }
   return(cds)
 }
-

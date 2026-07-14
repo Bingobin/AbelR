@@ -1,5 +1,32 @@
 # Functions for cellchat analyses.
 
+#' Build and run a CellChat analysis
+#'
+#' Extracts a normalized expression layer and metadata from a Seurat object,
+#' selects the human or mouse CellChat database, identifies overexpressed
+#' ligand-receptor genes and interactions, and computes communication networks
+#' and pathway centrality.
+#'
+#' @param seu A Seurat object with normalized expression and cell metadata.
+#' @param species Species matching the expression matrix and CellChat database;
+#'   either `"human"` or `"mouse"`.
+#' @param group.by Metadata column defining the cell groups used by CellChat.
+#' @param sample.by Metadata column identifying samples or replicates.
+#' @param cluster.by Optional metadata column copied to `meta$clusters`.
+#' @param assay Seurat assay from which expression data are extracted.
+#' @param layer Normalized expression layer passed to CellChat.
+#' @param min.cells Minimum number of cells required for retained communication.
+#' @param workers_overexpress Number of future workers used during
+#'   overexpression analysis.
+#' @param workers_prob Number of future workers used for communication
+#'   probability calculations.
+#' @param maxSize Maximum allowed future global size in bytes.
+#' @param type Averaging method passed to `CellChat::computeCommunProb()`.
+#' @param use_parallel Logical; use multisession parallel processing.
+#' @param verbose Logical; print input summaries and progress messages.
+#'
+#' @return A processed CellChat object.
+#' @export
 Build_CellChat_object <- function(
   seu,
   species = c("human", "mouse"),

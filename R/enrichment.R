@@ -1,5 +1,26 @@
 # Functions for enrichment analyses.
 
+#' Run species-aware over-representation analysis
+#'
+#' Performs GO Biological Process, Cellular Component, Molecular Function, and
+#' KEGG enrichment for Entrez genes, with optional Reactome, Hallmark, and
+#' WikiPathways analyses.
+#'
+#' @param gene Character vector of Entrez gene identifiers.
+#' @param pvc P-value cutoff passed to enrichment functions.
+#' @param qvc Q-value cutoff passed to enrichment functions.
+#' @param universe Optional character vector of background Entrez identifiers.
+#' @param species Species name or code accepted by AbelR, such as `"human"`,
+#'   `"hsa"`, `"mouse"`, or `"mmu"`.
+#' @param reactome Logical; include Reactome pathway enrichment.
+#' @param hallmark Logical; include MSigDB Hallmark enrichment.
+#' @param wikipathways Logical; include MSigDB WikiPathways enrichment.
+#' @param minGSSize,maxGSSize Minimum and maximum gene-set sizes.
+#'
+#' @return A named list containing `ego_bp`, `ego_cc`, `ego_mf`, `ekg`,
+#'   `reactome`, `hallmark`, and `wikipathways`; disabled or empty optional
+#'   analyses are returned as `NULL`.
+#' @export
 enrich_combind_s2 <- function(
   gene,
   pvc = 1,
@@ -246,6 +267,19 @@ enrich_combind_s2 <- function(
 }
 
 
+#' Summarize multiple enrichment categories
+#'
+#' Selects rows from GO, WikiPathways, and KEGG enrichment results and combines
+#' them in a faceted significance plot.
+#'
+#' @param enricher Enrichment list returned by [enrich_combind_s2()].
+#' @param bp,cc,mf,wp,kg Integer row indices selected from GO BP, GO CC, GO MF,
+#'   WikiPathways, and KEGG results.
+#' @param value Column index in each enrichment result used as the plotted
+#'   P-value-like quantity.
+#'
+#' @return A [ggplot2::ggplot] enrichment summary.
+#' @export
 enricher_plot <- function(
   enricher,
   bp = 1:5,
@@ -303,6 +337,19 @@ enricher_plot <- function(
 }
 
 
+#' Draw a customized GSEA running-score plot
+#'
+#' Builds a three-panel GSEA plot showing the enrichment score, ranked gene
+#' positions, and ranked-list metric for one selected gene set.
+#'
+#' @param gsea_ob A GSEA result object compatible with `enrichplot`.
+#' @param select_term Row index or term selection passed to the internal GSEA
+#'   plotting data extractor.
+#' @param color Colour used for the enrichment-score line and annotation.
+#' @param xpos X coordinate used to position the NES and adjusted P-value label.
+#'
+#' @return A combined cowplot drawing object.
+#' @export
 gsea_plot_custorm <- function(gsea_ob, select_term, color, xpos = 3000) {
   #gsea_ob <- aml_phenolyzer.gsea.crc
   #select_term <- 1
@@ -423,6 +470,20 @@ gsea_plot_custorm <- function(gsea_ob, select_term, color, xpos = 3000) {
 }
 
 
+#' Draw a customized GO enrichment dot plot
+#'
+#' Selects terms from an enrichment result, calculates gene counts, caps very
+#' small adjusted P values, and plots term significance and size.
+#'
+#' @param Enricher Enrichment result data frame or an object supporting data
+#'   frame-style column access.
+#' @param select_term Row indices of terms to display.
+#' @param color Name of an RColorBrewer sequential palette.
+#' @param Label Label displayed on the plot's categorical axis.
+#' @param pmin Minimum adjusted P value used when plotting `-log10` values.
+#'
+#' @return A [ggplot2::ggplot] object.
+#' @export
 go_plot_custom <- function(Enricher, select_term, color, Label, pmin) {
   #  Enricher <- Enricher.crc_tg$ego_bp
   #  select_term <- 1:20
@@ -455,6 +516,21 @@ go_plot_custom <- function(Enricher, select_term, color, Label, pmin) {
 }
 
 
+#' Plot enrichment trees for DESeq2 gene sets
+#'
+#' Splits an annotated DESeq2 result into upregulated, downregulated, and all
+#' differential genes, runs human GO and KEGG enrichment, and creates semantic
+#' similarity tree plots for each set.
+#'
+#' @param deg.df Annotated DESeq2 result containing `Entrez`, `padj`, and
+#'   `log2FoldChange`.
+#' @param label Character label identifying the comparison.
+#' @param pv Adjusted P-value threshold.
+#' @param lfc Absolute log2 fold-change threshold.
+#'
+#' @return A list containing gene counts, enrichment objects for each direction,
+#'   the comparison label, and a named list of plots.
+#' @export
 GO_BP_treeplot_DESeq2 <- function(deg.df, label, pv = 0.05, lfc = log2(1.5)) {
   #  deg.df <- HMGA2_sh2.DESeq2.result$result
   #  label <- "shHMGA2"
@@ -671,6 +747,21 @@ GO_BP_treeplot_DESeq2 <- function(deg.df, label, pv = 0.05, lfc = log2(1.5)) {
 }
 
 
+#' Plot enrichment trees for single-cell marker genes
+#'
+#' Converts human marker symbols to Entrez identifiers, separates upregulated
+#' and downregulated markers, performs GO and KEGG enrichment, and creates
+#' semantic similarity tree plots.
+#'
+#' @param deg.df Single-cell marker data frame with gene symbols as row names and
+#'   `p_val` and `avg_log2FC` columns.
+#' @param label Character label identifying the comparison.
+#' @param pv P-value threshold.
+#' @param lfc Absolute average log2 fold-change threshold.
+#'
+#' @return A list containing gene counts, directional enrichment objects, the
+#'   comparison label, and a named list of plots.
+#' @export
 GO_BP_treeplot_scRNAseq <- function(deg.df, label, pv = 0.05, lfc = 0.25) {
   #  deg.df <- XGJ.NEMOBvsNEMOA.degs
   #  label <- "NEMOBvsNEMOA"
@@ -830,6 +921,41 @@ GO_BP_treeplot_scRNAseq <- function(deg.df, label, pv = 0.05, lfc = 0.25) {
 }
 
 
+#' Run configurable gene-set enrichment analysis
+#'
+#' Builds a ranked Entrez gene vector from common bulk or single-cell DEG
+#' layouts and runs selected Hallmark, GO, KEGG, Reactome, or MSigDB gene-set
+#' enrichment analyses for human or mouse.
+#'
+#' @param deg.df Differential-expression data frame.
+#' @param species Species name or code for gene annotation and gene sets.
+#' @param rank_by Ranking preset (`"log2FC"`, `"stat"`, `"signed_p"`,
+#'   `"signed_padj"`, `"log2FC_p"`, or `"log2FC_padj"`) or the name of a
+#'   numeric column.
+#' @param dbs Character vector of databases to run, for example `"Hallmark"`,
+#'   `"GO_BP"`, `"GO_CC"`, `"GO_MF"`, `"GO_ALL"`, `"KEGG"`, or
+#'   `"Reactome"`.
+#' @param gene_id_col Column containing Entrez identifiers. When it is `Entrez`
+#'   and absent, a `Symbol` column is converted automatically.
+#' @param log2fc_col Optional log2 fold-change column; common names are detected
+#'   when `NULL`.
+#' @param stat_col Column containing the DESeq2 or equivalent test statistic.
+#' @param p_col,padj_col Optional raw and adjusted P-value columns; common names
+#'   are detected when `NULL`.
+#' @param collapse_dup Method used for duplicated gene IDs: largest absolute
+#'   score, mean score, or first occurrence.
+#' @param pvalueCutoff P-value cutoff supplied to GSEA functions.
+#' @param minGSSize,maxGSSize Minimum and maximum gene-set sizes.
+#' @param p_floor Smallest P value used when constructing logarithmic rankings.
+#' @param seed Random seed.
+#' @param kegg_source Run KEGG using `clusterProfiler` or MSigDB gene sets.
+#' @param readable Logical; convert leading-edge Entrez IDs to symbols where
+#'   possible.
+#' @param verbose Logical; show enrichment progress.
+#'
+#' @return A named list of requested GSEA result objects plus `geneList` and
+#'   `rank_info` describing the constructed ranking.
+#' @export
 GSEA_analysis <- function(
   deg.df,
   species = "human",
@@ -844,7 +970,7 @@ GSEA_analysis <- function(
   pvalueCutoff = 1,
   minGSSize = 10,
   maxGSSize = 500,
-  p_floor = 1e-300,
+  p_floor = 10^-300,
   seed = 123,
   kegg_source = c("clusterProfiler", "msigdbr"),
   readable = TRUE,
