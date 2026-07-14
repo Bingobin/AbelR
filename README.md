@@ -6,8 +6,7 @@
 ██║  ██║██████╔╝███████╗███████╗██║  ██║
 ╚═╝  ╚═╝╚═════╝ ╚══════╝╚══════╝╚═╝  ╚═╝
 
-        Bioinformatics analysis, modelling, and visualization
-              (•̀ᴗ•́)و  Ready to explore your data!
+Bioinformatics analysis, modelling, and visualizatio (•̀ᴗ•́)و  Ready to explore your data!
 </pre>
 
 <p align="center">
