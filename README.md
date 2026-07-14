@@ -8,8 +8,22 @@ scientific visualization.
 Load the package directly from the repository during development:
 
 ```r
-devtools::load_all()
+# When the current working directory is the AbelR repository root
+devtools::load_all(export_all = FALSE)
 ```
+
+`load_all()` uses the current directory (`"."`) by default. When the R console
+is already running from the AbelR repository root, no path is needed. From a
+different working directory, supply the package directory explicitly:
+
+```r
+devtools::load_all(path = "/path/to/AbelR", export_all = FALSE)
+```
+
+This loads the package source into the current R session without installing it.
+`export_all = FALSE` respects `NAMESPACE` and exposes only AbelR's public
+functions. Run it again after changing the source code to test the latest
+version.
 
 Install it locally and use it like a regular package:
 
@@ -31,14 +45,13 @@ library(AbelR)
 ls("package:AbelR")
 ```
 
-The functions below retain their original names so that existing analysis
-scripts can continue to use them. Function names and interfaces can be
-standardized gradually without combining that work with the initial package
-migration.
+The function index reflects the current public analysis interface. Superseded
+compatibility wrappers are removed after their logic is consolidated into the
+corresponding unified function.
 
 ## Function index
 
-AbelR currently contains 42 functions organized into nine analysis modules.
+AbelR currently contains 38 functions organized into nine analysis modules.
 The tables provide a short overview; detailed parameter, input, and return-value
 documentation should be maintained in the function-level roxygen2 comments.
 
@@ -153,14 +166,13 @@ package:
 | Monocle3 trajectory analysis | `monocle3` and `SingleCellExperiment` |
 | CellChat analysis | `CellChat` and `future` |
 | Mouse enrichment analysis | `org.Mm.eg.db` and the corresponding mouse genome resources |
+| Gene-symbol-to-Entrez conversion | `MAGeCKFlute` |
 | scTYPE annotation | scTYPE scripts and the scTYPE marker database |
 | Genome-track visualization | `trackViewer`, genome annotations, and compatible BAM or BigWig files |
 | DEG annotation and Manhattan plots | Bundled compressed gene-annotation tables, or a compatible user-supplied table |
 
-Several legacy functions still contain environment-specific file paths. Until
-those paths are converted into explicit arguments or AbelR options, verify the
-resource paths before running the affected functions on a new computer or
-server.
+Environment-specific resources are supplied through function arguments or
+AbelR options rather than fixed paths in active package code.
 
 ## Human and mouse DESeq2 configuration
 

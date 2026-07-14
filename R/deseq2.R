@@ -140,11 +140,16 @@ DESeq2_DEG_analysis_batch <- function(
   }
 
   if ("Symbol" %in% colnames(deseq2_result)) {
-    deseq2_result$Entrez <- MAGeCKFlute::TransGeneID(
-      deseq2_result$Symbol,
-      "Symbol",
-      "Entrez",
-      organism = organism
+    if (!requireNamespace("MAGeCKFlute", quietly = TRUE)) {
+      stop("Package 'MAGeCKFlute' is required to add Entrez IDs.")
+    }
+    deseq2_result$Entrez <- suppressPackageStartupMessages(
+      MAGeCKFlute::TransGeneID(
+        deseq2_result$Symbol,
+        "Symbol",
+        "Entrez",
+        organism = organism
+      )
     )
   } else {
     warning(

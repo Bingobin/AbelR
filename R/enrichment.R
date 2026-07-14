@@ -674,11 +674,16 @@ GO_BP_treeplot_DESeq2 <- function(deg.df, label, pv = 0.05, lfc = log2(1.5)) {
 GO_BP_treeplot_scRNAseq <- function(deg.df, label, pv = 0.05, lfc = 0.25) {
   #  deg.df <- XGJ.NEMOBvsNEMOA.degs
   #  label <- "NEMOBvsNEMOA"
-  deg.df$Entrez <- TransGeneID(
-    rownames(deg.df),
-    "Symbol",
-    "Entrez",
-    organism = "hsa"
+  if (!requireNamespace("MAGeCKFlute", quietly = TRUE)) {
+    stop("Package 'MAGeCKFlute' is required to convert gene IDs.")
+  }
+  deg.df$Entrez <- suppressPackageStartupMessages(
+    MAGeCKFlute::TransGeneID(
+      rownames(deg.df),
+      "Symbol",
+      "Entrez",
+      organism = "hsa"
+    )
   )
   up.entrez <- (deg.df %>% filter(p_val < pv, avg_log2FC > lfc))$Entrez
   dw.entrez <- (deg.df %>% filter(p_val < pv, avg_log2FC < -lfc))$Entrez
