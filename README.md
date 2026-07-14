@@ -1,4 +1,5 @@
-```text
+<div align="center">
+<pre>
  █████╗ ██████╗ ███████╗██╗     ██████╗
 ██╔══██╗██╔══██╗██╔════╝██║     ██╔══██╗
 ███████║██████╔╝█████╗  ██║     ██████╔╝
@@ -8,10 +9,13 @@
 
         Bioinformatics analysis, modelling, and visualization
               (•̀ᴗ•́)و  Ready to explore your data!
-```
+</pre>
+</div>
 
-Personal R framework for bioinformatics analysis, statistical modeling and
-scientific visualization.
+<p align="center">
+  Personal R framework for bioinformatics analysis, statistical modeling and
+  scientific visualization.
+</p>
 
 ## Development
 
