@@ -11,7 +11,8 @@ trackview_peak_roi(
   extend = 1500,
   info,
   type = "BigWig",
-  color = c("#08537C", "#A63603", "#A81E2C", "#005824", "#08537C", "#7A0177", "#023858")
+  color = c("#08537C", "#A63603", "#A81E2C", "#005824", "#08537C", "#7A0177", "#023858"),
+  left_margin = 0.12
 )
 }
 \arguments{
@@ -30,6 +31,9 @@ according to \code{type}.}
 \item{type}{Input signal format: \code{"BAM"}, \code{"BigWig"}, or \code{"BED"}.}
 
 \item{color}{Colours interpolated across signal tracks.}
+
+\item{left_margin}{Fraction of the plotting canvas reserved for horizontal
+track labels on the left. Increase this value for long sample IDs.}
 }
 \value{
 The value returned by \code{\link[trackViewer:addGuideLine]{trackViewer::addGuideLine()}}, used primarily

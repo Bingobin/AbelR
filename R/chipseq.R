@@ -44,8 +44,8 @@ enhancer_rank_plot <- function(label, sample, top, rank.df) {
       lwd = 0.8
     )
 
-  #p <- p + ggrepel::geom_label_repel(data = enhancer_signal[enhancer_signal$CLOSEST_GENE %in% label | enhancer_signal$Rank %in% 1:top,],
-  #aes(x = Rank/1000, y = Signal, label = CLOSEST_GENE, fill = Type),
+  # p <- p + ggrepel::geom_label_repel(data = enhancer_signal[enhancer_signal$CLOSEST_GENE %in% label | enhancer_signal$Rank %in% 1:top,],
+  # aes(x = Rank/1000, y = Signal, label = CLOSEST_GENE, fill = Type),
   p <- p +
     ggrepel::geom_text_repel(
       data = enhancer_signal[
@@ -67,7 +67,7 @@ enhancer_rank_plot <- function(label, sample, top, rank.df) {
       max.overlaps = 10000
     )
   #+
-  #scale_fill_manual(values=c(brewer.pal(n = 9, name ="Set3")[4], brewer.pal(n = 9, name ="Set3")[9]))
+  # scale_fill_manual(values=c(brewer.pal(n = 9, name ="Set3")[4], brewer.pal(n = 9, name ="Set3")[9]))
   p <- p +
     theme(
       legend.title = element_blank(),
@@ -200,7 +200,7 @@ peak_pieplot_byhomer <- function(
   df.pie$labs <- paste(df.pie$Pro, "%")
   df.pie$TypeII <- paste0(df.pie$Type, "(", df.pie$labs, ")")
   df.pie$TypeII <- fct_reorder(df.pie$TypeII, -df.pie$Num)
-  #ggdonutchart(df.pie, "Num", label = "labs", fill = "Type",color = "white",lab.pos = "out", lab.font = c("black","blod",5)) + theme(legend.position = "right")  + scale_fill_manual(values = color) + ggtitle(prefix)
+  # ggdonutchart(df.pie, "Num", label = "labs", fill = "Type",color = "white",lab.pos = "out", lab.font = c("black","blod",5)) + theme(legend.position = "right")  + scale_fill_manual(values = color) + ggtitle(prefix)
   ggpie(
     df.pie,
     "Num",
@@ -383,6 +383,8 @@ track_view_cre_mut <- function(chr, region, mut_pos, tf_name, num) {
 #'   according to `type`.
 #' @param type Input signal format: `"BAM"`, `"BigWig"`, or `"BED"`.
 #' @param color Colours interpolated across signal tracks.
+#' @param left_margin Fraction of the plotting canvas reserved for horizontal
+#'   track labels on the left. Increase this value for long sample IDs.
 #'
 #' @return The value returned by [trackViewer::addGuideLine()], used primarily
 #'   for its plotting side effect.
@@ -402,13 +404,13 @@ trackview_peak_roi <- function(
     "#08537C",
     "#7A0177",
     "#023858"
-  )
+  ),
+  left_margin = 0.12
 ) {
-  #tf_name <- "ZMIZ1"
-  #info <ID BW BAM>
-  #chrom <- "chr21:34,787,801-36,004,667"
   for (pkg in c(
+    "AnnotationDbi",
     "trackViewer",
+    "org.Hs.eg.db",
     "TxDb.Hsapiens.UCSC.hg38.knownGene",
     "GenomicRanges",
     "IRanges"
@@ -421,19 +423,37 @@ trackview_peak_roi <- function(
   region_str <- sub(".*:", "", chrom)
   region_split <- strsplit(region_str, "-")[[1]]
   region <- as.numeric(gsub(",", "", region_split))
+  if (
+    length(left_margin) != 1 ||
+      !is.numeric(left_margin) ||
+      is.na(left_margin) ||
+      left_margin <= 0 ||
+      left_margin >= 0.5
+  ) {
+    stop("left_margin must be one number greater than 0 and less than 0.5.")
+  }
 
-  symbol_map <- getExportedValue("org.Hs.eg.db", "org.Hs.egSYMBOL2EG")
+  orgdb <- getExportedValue("org.Hs.eg.db", "org.Hs.eg.db")
   txdb <- getExportedValue(
     "TxDb.Hsapiens.UCSC.hg38.knownGene",
     "TxDb.Hsapiens.UCSC.hg38.knownGene"
   )
+  entrez_id <- suppressMessages(
+    AnnotationDbi::mapIds(
+      orgdb,
+      keys = tf_name[1],
+      column = "ENTREZID",
+      keytype = "SYMBOL",
+      multiVals = "first"
+    )
+  )
+  if (length(entrez_id) != 1 || is.na(entrez_id) || !nzchar(entrez_id)) {
+    stop("Unable to map gene symbol to a human Entrez ID: ", tf_name[1])
+  }
   TF1 <- trackViewer::geneTrack(
-    get(tf_name[1], symbol_map),
+    unname(entrez_id),
     txdb
   )[[1]]
-  #chr_tf <- as.character(unique(seqnames(TF1@dat)))
-  #start_tf <- min(start(TF1@dat))
-  #end_tf <-  max(start(TF1@dat))
 
   gr <- GenomicRanges::GRanges(
     chr,
@@ -460,6 +480,15 @@ trackview_peak_roi <- function(
   )
   trackList <- optSty$tracks
   viewerStyle <- optSty$style
+  trackViewer::setTrackViewerStyleParam(
+    viewerStyle, "autolas", FALSE
+  )
+  viewer_margin <- viewerStyle@margin
+  viewer_margin[2] <- left_margin
+  viewer_margin[1] <- max(viewer_margin[1], 0.02)
+  trackViewer::setTrackViewerStyleParam(
+    viewerStyle, "margin", viewer_margin
+  )
 
   Color <- colorRampPalette(color)(nrow(info))
   Color <- c("black", Color)
@@ -480,9 +509,13 @@ trackview_peak_roi <- function(
 
   for (i in 1:length(trackList)) {
     trackViewer::setTrackStyleParam(trackList[[i]], "color", Color[i])
-  }
-  for (i in 1:length(trackList)) {
-    trackViewer::setTrackStyleParam(trackList[[i]], "ylabgp", list(cex = .8))
+    trackViewer::setTrackStyleParam(
+      trackList[[i]],
+      "ylabgp",
+      list(cex = 0.8, col = Color[i])
+    )
+    trackViewer::setTrackStyleParam(trackList[[i]], "ylabpos", "left")
+    trackViewer::setTrackStyleParam(trackList[[i]], "ylablas", 1)
   }
   trackViewer::setTrackStyleParam(trackList[[1]], "height", 0.03)
   names(trackList) <- c(tf_name, info$ID)
@@ -560,7 +593,7 @@ cre_h3k27ac_area_plot <- function(
 #' @return The reordered data frame with an added `Center_density` column.
 #' @export
 heatmap_sort <- function(heatmap.df) {
-  #heatmap.df<-heatmap.df.1
+  # heatmap.df<-heatmap.df.1
   bin_num <- (ncol(heatmap.df) - 1)
   summit <- ceiling(bin_num / 2) + 1
   start <- summit - ceiling(bin_num * 0.5) + 1
@@ -643,5 +676,5 @@ ChIPseq_heatmap_plot <- function(
     cluster_cols = FALSE,
     color = colorRampPalette(brewer.pal(n = 9, name = brew.color))(100)
   )
-  #dev.off()
+  # dev.off()
 }
