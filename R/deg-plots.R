@@ -202,7 +202,7 @@ target_for_volcano <- function(
   pv = 0.05,
   fc = 1.5
 ) {
-  #deseq2_result.df <- RELA_MUTvsWT_NON.DEGs$result
+  # deseq2_result.df <- RELA_MUTvsWT_NON.DEGs$result
   if (pc == TRUE) {
     deseq2_result.df <- deseq2_result.df |>
       filter(Gene_Type == "protein_coding")
@@ -295,12 +295,12 @@ volcano_plot_Deseq2 <- function(
   gg[gg$log2FoldChange < -log2(fc) & gg$padj < pv, ]$group <- "down"
   gg$color <- gg$group
   gg$color[index] <- "black"
-  #mycolour = c("grey", "#A81E2C","#08537C", "black")
+  # mycolour = c("grey", "#A81E2C","#08537C", "black")
   mycolour <- c("grey", "#810F7C", "#006D2C", "black")
   names(mycolour) <- c("no", "up", "down", "black")
   gg$label <- ""
   gg$label[index] <- gg$Symbol[index]
-  #gg[gg$group == "no",]$label <- ""
+  # gg[gg$group == "no",]$label <- ""
   if (max(gg$log2FoldChange) > max_x) {
     gg[gg$log2FoldChange > max_x, ]$log2FoldChange <- max_x
   }
@@ -341,7 +341,7 @@ volcano_plot_Deseq2 <- function(
       max.overlaps = 10000
     )
   p <- p + theme_test()
-  #p= p + xlim(-4,4) + ylim(0,100)
+  # p= p + xlim(-4,4) + ylim(0,100)
   if (adjust) {
     p <- p + ylab("-log10(padj)")
   } else {
@@ -395,18 +395,18 @@ volcano_plot_scRNA <- function(
     slice_min(order_by = p_val_adj, n = top, with_ties = FALSE) |>
     pull(Symbol)
   gene.list <- unique(c(top_up_genes, top_down_genes, gene.list))
-  #gene.list <- c(rownames(gg %>% slice_head(n=8)),gene.list)
+  # gene.list <- c(rownames(gg %>% slice_head(n=8)),gene.list)
   index <- match(gene.list, gg$Symbol)
   index <- na.omit(index)
   gg$group <- "no"
   try(gg[gg$avg_log2FC > log2(fc) & gg$p_val_adj < pv, ]$group <- "up")
   try(gg[gg$avg_log2FC < -log2(fc) & gg$p_val_adj < pv, ]$group <- "down")
-  #try(gg[gg$avg_log2FC > log2(fc) & gg$p_val < pv,]$group <- "up")
-  #try(gg[gg$avg_log2FC < -log2(fc) & gg$p_val < pv,]$group <- "down")
+  # try(gg[gg$avg_log2FC > log2(fc) & gg$p_val < pv,]$group <- "up")
+  # try(gg[gg$avg_log2FC < -log2(fc) & gg$p_val < pv,]$group <- "down")
   gg$color <- gg$group
   gg$color[index] <- "black"
-  #mycolour = c("grey", "#B30000", "#08519C", "black")
-  #mycolour = c("grey", "#810F7C", "#006D2C", "black")
+  # mycolour = c("grey", "#B30000", "#08519C", "black")
+  # mycolour = c("grey", "#810F7C", "#006D2C", "black")
   mycolour <- c("grey", "#A81E2C", "#08537C", "black")
   names(mycolour) <- c("no", "up", "down", "black")
   gg$label <- ""
@@ -416,7 +416,7 @@ volcano_plot_scRNA <- function(
   #  if(min(gg$avg_log2FC) < -max_x){gg[gg$avg_log2FC < -max_x,]$avg_log2FC = -max_x}
   #  if(min(gg$p_val_adj) < 10^-max_y){gg[gg$p_val_adj < 10^-max_y,]$p_val_adj = 10^-max_y}
   p <- ggplot(gg, aes(x = avg_log2FC, y = -log10(p_val_adj)))
-  #p <- ggplot(gg, aes(x = avg_log2FC, y = -log10(p_val)))
+  # p <- ggplot(gg, aes(x = avg_log2FC, y = -log10(p_val)))
   p <- p +
     geom_point_rast(
       aes(fill = group, size = pct.1),
@@ -677,7 +677,7 @@ plot_deg_comparison <- function(
       show.legend = FALSE
     ) +
     # 第二层:按Group着色(FC+PV标准)的空心点
-    #geom_point_rast(aes(color = Group), shape = 1, alpha = 0.6, show.legend = FALSE) +
+    # geom_point_rast(aes(color = Group), shape = 1, alpha = 0.6, show.legend = FALSE) +
     geom_point_rast(
       data = vs.degs |> filter(Group != "other"),
       aes(color = Group),
@@ -764,25 +764,25 @@ plot_deg_comparison <- function(
 #'   (`top_genes`), and the [ggplot2::ggplot] object (`plot`).
 #' @export
 plot_deg_manhattan <- function(
-    deg_list,
-    color_map,
-    species = c("mouse", "human"),
-    deg_cols = NULL,
-    symbol_col = "Symbol",
-    lfc_col = "log2FoldChange",
-    p_col = "pvalue",
-    padj_col = "padj",
-    gene_anno_file = NULL,
-    chromosome_lengths = NULL,
-    gene_type_filter = "protein_coding",
-    remove_rik = TRUE,
-    top_n = 10,
-    cap_value = 20,
-    chr_keep = NULL,
-    facet_nrow = 1
+  deg_list,
+  color_map,
+  species = c("mouse", "human"),
+  deg_cols = NULL,
+  symbol_col = "Symbol",
+  lfc_col = "log2FoldChange",
+  p_col = "pvalue",
+  padj_col = "padj",
+  gene_anno_file = NULL,
+  chromosome_lengths = NULL,
+  gene_type_filter = "protein_coding",
+  remove_rik = TRUE,
+  top_n = 10,
+  cap_value = 20,
+  chr_keep = NULL,
+  facet_nrow = 1
 ) {
   species <- match.arg(species)
-  
+
   if (!requireNamespace("ggrepel", quietly = TRUE)) {
     stop("Package 'ggrepel' is required for plot_deg_manhattan().")
   }
@@ -809,13 +809,13 @@ plot_deg_manhattan <- function(
   deg_cols <- c(symbol_col, lfc_col, p_col, padj_col)
 
   gene_anno <- .abel_gene_annotation(species, gene_anno_file)
-  
+
   required_anno_cols <- c("Symbol", "Chr", "Start")
   missing_anno <- setdiff(required_anno_cols, colnames(gene_anno))
   if (length(missing_anno) > 0) {
     stop("gene_anno_file is missing required columns: ", paste(missing_anno, collapse = ", "))
   }
-  
+
   if (is.null(chromosome_lengths)) {
     end_col <- if ("End" %in% colnames(gene_anno)) "End" else "Start"
     chromosome_lengths <- tapply(
@@ -832,7 +832,7 @@ plot_deg_manhattan <- function(
   }
   offset <- c(0, head(cumsum(as.numeric(chromosome_lengths)), -1))
   names(offset) <- names(chromosome_lengths)
-  
+
   gene_anno <- gene_anno %>%
     mutate(
       Chr = as.character(Chr)
@@ -843,62 +843,63 @@ plot_deg_manhattan <- function(
       start_g = offset + Start
     ) %>%
     select(-offset)
-  
+
   ## merge DEG tables
   tmp_degs_list <- lapply(names(deg_list), function(trt) {
-    
     if (!trt %in% names(color_map)) {
       stop("Treatment '", trt, "' not found in color_map")
     }
-    
+
     deg_df <- deg_list[[trt]]
-    
+
     missing_deg_cols <- setdiff(deg_cols, colnames(deg_df))
     if (length(missing_deg_cols) > 0) {
-      stop("In treatment '", trt, "', DEG table is missing columns: ",
-           paste(missing_deg_cols, collapse = ", "))
+      stop(
+        "In treatment '", trt, "', DEG table is missing columns: ",
+        paste(missing_deg_cols, collapse = ", ")
+      )
     }
-    
+
     deg_df <- deg_df[, deg_cols, drop = FALSE]
     colnames(deg_df) <- c("Symbol", "log2FoldChange", "pvalue", "padj")
-    
+
     deg_df %>%
       left_join(gene_anno, by = "Symbol") %>%
       mutate(Treatment = trt)
   })
-  
+
   deg_merge <- bind_rows(tmp_degs_list)
-  
+
   ## score
   deg_merge <- deg_merge %>%
     mutate(
-      padj_safe = dplyr::if_else(is.na(padj) , NA_real_,  pmax(padj, 1e-300)),
+      padj_safe = dplyr::if_else(is.na(padj), NA_real_, pmax(padj, 1e-300)),
       value = log2FoldChange * -log10(padj_safe)
     ) %>%
     filter(!is.na(value), !is.na(start_g))
-  
+
   ## optional filters
   if ("Gene_Type" %in% colnames(deg_merge) && !is.null(gene_type_filter)) {
     deg_merge <- deg_merge %>% filter(Gene_Type == gene_type_filter)
   }
-  
+
   if (remove_rik) {
     deg_merge <- deg_merge %>% filter(!grepl("Rik$", Symbol))
   }
-  
+
   ## cap values
   deg_merge <- deg_merge %>%
     mutate(
       value = ifelse(value > cap_value, cap_value, value),
       value = ifelse(value < -cap_value, -cap_value, value)
     )
-  
+
   ## top genes
   top_genes <- deg_merge %>%
     group_by(Treatment) %>%
     slice_max(order_by = abs(value), n = top_n, with_ties = FALSE) %>%
     ungroup()
-  
+
   deg_merge <- deg_merge %>%
     mutate(
       label = if_else(
@@ -908,7 +909,7 @@ plot_deg_manhattan <- function(
       ),
       Treatment = factor(Treatment, levels = names(color_map))
     )
-  
+
   deg_merge <- deg_merge %>%
     mutate(
       Regulation = case_when(
@@ -923,7 +924,7 @@ plot_deg_manhattan <- function(
     Down = "#3C5488",
     NS = "grey80"
   )
-  
+
   ## plot
   p_man <- ggplot(deg_merge, aes(x = start_g, y = value)) +
     ggrastr::geom_point_rast(
@@ -945,8 +946,8 @@ plot_deg_manhattan <- function(
       segment.size = 0.3,
       max.overlaps = Inf
     ) +
-    facet_wrap(~ Treatment, nrow = facet_nrow) +
-    scale_color_manual(values = c(color_map,reg_color_map)) +
+    facet_wrap(~Treatment, nrow = facet_nrow) +
+    scale_color_manual(values = c(color_map, reg_color_map)) +
     theme_test() +
     theme(
       axis.ticks.x = element_blank(),
@@ -954,7 +955,7 @@ plot_deg_manhattan <- function(
     ) +
     xlab("") +
     ylab("log2FoldChange * -log10(padj)")
-  
+
   return(list(
     deg_merge = deg_merge,
     top_genes = top_genes,

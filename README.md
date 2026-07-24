@@ -63,7 +63,7 @@ corresponding unified function.
 
 ## Function index
 
-AbelR currently contains 39 functions organized into nine analysis modules.
+AbelR currently contains 41 functions organized into nine analysis modules.
 The tables provide a short overview; detailed parameter, input, and return-value
 documentation should be maintained in the function-level roxygen2 comments.
 
@@ -73,10 +73,30 @@ Source: `R/deseq2.R`
 
 | Function | Description |
 |---|---|
+| `build_bulkRNA_batches()` | Merge batch-specific count and TPM tables and construct `CellLine/Library/Batch/Group` sample metadata. |
+| `plot_bulkRNA_PCA()` | Calculate VST-based sample PCA from `build_bulkRNA_batches()` output and draw a batch-aware static or interactive plot. |
 | `DESeq2_DEG_analysis()` | Run a two-group human or mouse DESeq2 analysis using the shared species-aware implementation. |
 | `DESeq2_DEG_analysis_batch()` | Run human or mouse DESeq2 analysis using the same `Group/Batch/Library` design and `GID` matrix format. |
 | `DESeq2_DEG_extract()` | Extract significantly upregulated and downregulated genes and optionally draw a heatmap. |
 | `Compare_pairwise_Deseq2()` | Compare fold changes from two DESeq2 result tables and highlight shared directional changes. |
+
+```r
+bulk <- build_bulkRNA_batches(
+  batches = c("26526", "26527"),
+  target = "KAP1",
+  library_name = "mRNA"
+)
+
+pca <- plot_bulkRNA_PCA(
+  bulk,
+  title = "PCA of KAP1 RNA-seq samples",
+  top_var_n = 5000,
+  interactive = TRUE
+)
+pca$plot
+pca$heatmap
+pca$interactive_plot
+```
 
 ### Differential expression visualization
 
