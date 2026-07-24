@@ -2,8 +2,8 @@
 
 #' Run species-aware over-representation analysis
 #'
-#' Performs GO Biological Process, Cellular Component, Molecular Function, and
-#' KEGG enrichment for Entrez genes, with optional Reactome, Hallmark, and
+#' Performs GO Biological Process, Cellular Component, and Molecular Function
+#' enrichment for Entrez genes, with optional KEGG, Reactome, Hallmark, and
 #' WikiPathways analyses.
 #'
 #' @param gene Character vector of Entrez gene identifiers.
@@ -12,6 +12,7 @@
 #' @param universe Optional character vector of background Entrez identifiers.
 #' @param species Species name or code accepted by AbelR, such as `"human"`,
 #'   `"hsa"`, `"mouse"`, or `"mmu"`.
+#' @param kegg Logical; include KEGG pathway enrichment.
 #' @param reactome Logical; include Reactome pathway enrichment.
 #' @param hallmark Logical; include MSigDB Hallmark enrichment.
 #' @param wikipathways Logical; include MSigDB WikiPathways enrichment.
@@ -27,6 +28,7 @@ enrich_combind <- function(
   qvc = 1,
   universe = NULL,
   species = "human",
+  kegg = TRUE,
   reactome = TRUE,
   hallmark = TRUE,
   wikipathways = FALSE,
@@ -111,21 +113,26 @@ enrich_combind <- function(
   )
 
   ## -------- KEGG --------
-  ekg <- clusterProfiler::enrichKEGG(
-    gene = gene,
-    organism = kegg_org,
-    pvalueCutoff = pvc,
-    qvalueCutoff = qvc,
-    universe = universe,
-    minGSSize = minGSSize,
-    maxGSSize = maxGSSize
-  )
-  if (!is.null(ekg) && nrow(as.data.frame(ekg)) > 0) {
-    ekg <- clusterProfiler::setReadable(
-      ekg,
-      current_OrgDb,
-      keyType = "ENTREZID"
+  ekg <- NULL
+  if (isTRUE(kegg)) {
+    ekg <- clusterProfiler::enrichKEGG(
+      gene = gene,
+      organism = kegg_org,
+      pvalueCutoff = pvc,
+      qvalueCutoff = qvc,
+      universe = universe,
+      minGSSize = minGSSize,
+      maxGSSize = maxGSSize
     )
+    if (!is.null(ekg) && nrow(as.data.frame(ekg)) > 0) {
+      ekg <- clusterProfiler::setReadable(
+        ekg,
+        current_OrgDb,
+        keyType = "ENTREZID"
+      )
+    } else {
+      ekg <- NULL
+    }
   }
 
   ## -------- Reactome --------

@@ -109,7 +109,7 @@ Source: `R/enrichment.R`
 
 | Function | Description |
 |---|---|
-| `enrich_combind()` | Unified GO and KEGG analysis with optional Reactome, Hallmark, and WikiPathways results. |
+| `enrich_combind()` | Unified GO analysis with optional KEGG, Reactome, Hallmark, and WikiPathways results. |
 | `enricher_plot()` | Combine selected enrichment categories into a summary visualization. |
 | `gsea_plot_custorm()` | Build a customized GSEA running-score plot for selected terms. |
 | `go_plot_custom()` | Draw a customized GO enrichment plot for selected terms. |

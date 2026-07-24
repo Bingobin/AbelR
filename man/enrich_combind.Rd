@@ -10,6 +10,7 @@ enrich_combind(
   qvc = 1,
   universe = NULL,
   species = "human",
+  kegg = TRUE,
   reactome = TRUE,
   hallmark = TRUE,
   wikipathways = FALSE,
@@ -29,6 +30,8 @@ enrich_combind(
 \item{species}{Species name or code accepted by AbelR, such as \code{"human"},
 \code{"hsa"}, \code{"mouse"}, or \code{"mmu"}.}
 
+\item{kegg}{Logical; include KEGG pathway enrichment.}
+
 \item{reactome}{Logical; include Reactome pathway enrichment.}
 
 \item{hallmark}{Logical; include MSigDB Hallmark enrichment.}
@@ -43,7 +46,7 @@ A named list containing \code{ego_bp}, \code{ego_cc}, \code{ego_mf}, \code{ekg},
 analyses are returned as \code{NULL}.
 }
 \description{
-Performs GO Biological Process, Cellular Component, Molecular Function, and
-KEGG enrichment for Entrez genes, with optional Reactome, Hallmark, and
+Performs GO Biological Process, Cellular Component, and Molecular Function
+enrichment for Entrez genes, with optional KEGG, Reactome, Hallmark, and
 WikiPathways analyses.
 }
