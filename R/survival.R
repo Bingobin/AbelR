@@ -565,10 +565,10 @@ plot_logistic_forest <- function(
   plot <- ggplot(
     result,
     aes(
-      x = stats::reorder(display_term, estimate),
-      y = estimate,
-      ymin = conf.low,
-      ymax = conf.high
+      x = stats::reorder(.data$display_term, .data$estimate),
+      y = .data$estimate,
+      ymin = .data$conf.low,
+      ymax = .data$conf.high
     )
   ) +
     geom_pointrange(color = point_color) +
@@ -588,7 +588,7 @@ plot_logistic_forest <- function(
   if (show_labels) {
     plot <- plot +
       geom_text(
-        aes(label = label),
+        aes(label = .data$label),
         vjust = -1.2,
         color = "black",
         na.rm = TRUE

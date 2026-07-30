@@ -124,6 +124,21 @@ Source: `R/survival.R`
 | `plot_roc_curve()` | Plot time-dependent survival ROC curves from a risk-score data set. |
 | `plot_logistic_forest()` | Fit a binary logistic regression model and plot coefficient-level odds ratios with confidence intervals. |
 
+### UK Biobank analysis
+
+Source: `R/ukb.R`
+
+| Function | Description |
+|---|---|
+| `prepare_ukb_icd10_events()` | Align pipe-separated ICD-10 diagnoses with UK Biobank diagnosis-date array fields. |
+| `classify_ukb_thrombosis()` | Classify ICD-10 codes into arterial, venous, pregnancy-related, and other thromboembolism groups. |
+| `merge_ukb_chip_callsets()` | Merge in-house and UKB-released CHIP variant calls while retaining source-specific VAF values. |
+| `classify_chip_carriers()` | Create participant-level overall, gene-specific, small-clone, and large-clone CHIP indicators. |
+| `make_ukb_competing_risk_data()` | Construct incident-event follow-up data with death represented as a competing event. |
+| `fit_ukb_competing_risk()` | Fit crude and adjusted Fine-Gray models and calculate cumulative incidence by exposure group. |
+| `run_ukb_omics_limma()` | Run covariate-adjusted limma analysis across Olink or other continuous UKB omics traits. |
+| `build_ukb_multiomic_score()` | Calculate beta-weighted module scores and a combined standardized multi-omics score. |
+
 ### Enrichment and gene-set analysis
 
 Source: `R/enrichment.R`
@@ -188,6 +203,8 @@ package:
 | CytoTRACE2 analysis | `CytoTRACE2` |
 | Monocle3 trajectory analysis | `monocle3` and `SingleCellExperiment` |
 | CellChat analysis | `CellChat` and `future` |
+| UKB omics association analysis | `limma` |
+| UKB Fine-Gray competing-risk analysis | `cmprsk` |
 | Mouse enrichment analysis | `org.Mm.eg.db` and the corresponding mouse genome resources |
 | Gene-symbol-to-Entrez conversion | `MAGeCKFlute` |
 | scTYPE annotation | scTYPE scripts and the scTYPE marker database |
