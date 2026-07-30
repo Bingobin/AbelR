@@ -4,7 +4,9 @@
 #'
 #' Extracts variance-stabilized expression for significant genes, scales each
 #' gene across samples, labels selected and top-ranked genes, and draws a
-#' ComplexHeatmap with sample-group annotation.
+#' ComplexHeatmap with sample-group annotation. A message is shown when either
+#' direction has no genes; the heatmap is skipped when fewer than two genes are
+#' available.
 #'
 #' @param deg_result AbelR DESeq2 result list containing `result`, `vsd`, and
 #'   `design` components.
@@ -13,7 +15,8 @@
 #' @param top_n Number of top upregulated and downregulated genes to label.
 #'
 #' @return Invisibly returns the [ComplexHeatmap::Heatmap] object after drawing
-#'   it on the active graphics device.
+#'   it on the active graphics device, or `NULL` when fewer than two genes are
+#'   available.
 #' @export
 plot_deg_heatmap_for_DEGseq2 <- function(
   deg_result,
@@ -30,8 +33,30 @@ plot_deg_heatmap_for_DEGseq2 <- function(
 
   up_n <- nrow(deg_result$up)
   dw_n <- nrow(deg_result$dw)
+  if (up_n == 0 && dw_n == 0) {
+    message(
+      sample_name,
+      ": no upregulated or downregulated DEGs; skip heatmap."
+    )
+    return(invisible(NULL))
+  }
+  if (up_n == 0) {
+    message(
+      sample_name,
+      ": no upregulated DEGs; plotting downregulated DEGs only."
+    )
+  }
+  if (dw_n == 0) {
+    message(
+      sample_name,
+      ": no downregulated DEGs; plotting upregulated DEGs only."
+    )
+  }
   if (length(deg_genes) < 2) {
-    message(sample_name, ": fewer than 2 DEGs, skip heatmap.")
+    message(
+      sample_name,
+      ": fewer than 2 DEGs are available in the VST matrix; skip heatmap."
+    )
     return(invisible(NULL))
   }
 
@@ -187,10 +212,11 @@ plot_deg_heatmap_for_DEGseq2 <- function(
 #' @param deseq2_result.df Annotated DESeq2 result data frame containing
 #'   `Symbol`, `log2FoldChange`, and `padj`.
 #' @param gene.list Character vector of gene symbols that must be retained.
-#' @param n Number of nonsignificant background genes to sample.
+#' @param n Maximum number of nonsignificant background genes to sample.
 #' @param pc Logical; restrict candidates to protein-coding genes.
 #' @param pv Adjusted P-value threshold.
 #' @param fc Fold-change threshold on the linear scale.
+#' @param p_col Significance column used to select genes.
 #'
 #' @return A character vector of selected gene symbols.
 #' @export
@@ -200,22 +226,49 @@ target_for_volcano <- function(
   n = 5000,
   pc = FALSE,
   pv = 0.05,
-  fc = 1.5
+  fc = 1.5,
+  p_col = "padj"
 ) {
   # deseq2_result.df <- RELA_MUTvsWT_NON.DEGs$result
   if (pc == TRUE) {
     deseq2_result.df <- deseq2_result.df |>
       filter(Gene_Type == "protein_coding")
   }
-  deg.list <- (deseq2_result.df |>
-    filter(abs(log2FoldChange) > log2(fc), padj < pv))$Symbol
-  other.list <- (deseq2_result.df |>
-    filter(!Symbol %in% deg.list, !is.na(log2FoldChange), !is.na(padj)))$Symbol
+  if (
+    length(p_col) != 1 ||
+      is.na(p_col) ||
+      !p_col %in% colnames(deseq2_result.df)
+  ) {
+    stop("p_col must name a column in deseq2_result.df.")
+  }
+  significance <- deseq2_result.df[[p_col]]
+  valid <- !is.na(deseq2_result.df$log2FoldChange) & !is.na(significance)
+  deg_index <- valid &
+    abs(deseq2_result.df$log2FoldChange) > log2(fc) &
+    significance < pv
+  deg.list <- deseq2_result.df$Symbol[deg_index]
+  other.list <- deseq2_result.df$Symbol[
+    valid & !deseq2_result.df$Symbol %in% deg.list
+  ]
+  if (
+    length(n) != 1 ||
+      !is.numeric(n) ||
+      is.na(n) ||
+      !is.finite(n) ||
+      n < 0
+  ) {
+    stop("n must be one non-negative number.")
+  }
+  sample_n <- min(as.integer(n), length(other.list))
   set.seed(123)
-  random.list <- sample(other.list, n)
+  random.list <- if (sample_n > 0) {
+    sample(other.list, sample_n)
+  } else {
+    character(0)
+  }
   result.list <- c(deg.list, random.list)
   result.list <- c(result.list, gene.list)
-  return(result.list)
+  return(unique(result.list))
 }
 
 
@@ -223,7 +276,9 @@ target_for_volcano <- function(
 #'
 #' Creates a volcano plot from a DESeq2 result table, classifies significantly
 #' upregulated and downregulated genes, and labels selected genes together with
-#' the most significant genes in each direction.
+#' the most significant genes in each direction. The plot is still returned
+#' when either or both DEG directions are empty; counts are reported in a
+#' message and in the plot subtitle.
 #'
 #' @param deseq2_result.df A data frame containing at least `Symbol`,
 #'   `log2FoldChange`, `pvalue`, and `padj` columns. A `Gene_Type` column is
@@ -270,7 +325,8 @@ volcano_plot_Deseq2 <- function(
     n = n,
     pc = pc,
     pv = pv,
-    fc = fc
+    fc = fc,
+    p_col = if (adjust) "padj" else "pvalue"
   )
   gg <- deseq2_result.df[, c("Symbol", "log2FoldChange")]
   if (adjust) {
@@ -280,19 +336,47 @@ volcano_plot_Deseq2 <- function(
   }
   gg <- gg[match(target_gene.list, gg$Symbol), ]
   gg <- gg |> filter(!is.na(log2FoldChange), !is.na(padj))
+  if (nrow(gg) == 0) {
+    stop("No genes with valid fold changes and P values are available to plot.")
+  }
+  gg$group <- "no"
+  up_index <- gg$log2FoldChange > log2(fc) & gg$padj < pv
+  down_index <- gg$log2FoldChange < -log2(fc) & gg$padj < pv
+  gg$group[up_index] <- "up"
+  gg$group[down_index] <- "down"
+
+  up_n <- sum(up_index)
+  dw_n <- sum(down_index)
+  count_message <- paste0(
+    "Significant DEGs at P < ",
+    pv,
+    " and |FC| > ",
+    fc,
+    ": Up = ",
+    up_n,
+    ", Down = ",
+    dw_n,
+    "."
+  )
+  if (up_n == 0 && dw_n == 0) {
+    message(count_message, " Plotting background genes only.")
+  } else if (up_n == 0) {
+    message(count_message, " No upregulated DEGs were detected.")
+  } else if (dw_n == 0) {
+    message(count_message, " No downregulated DEGs were detected.")
+  }
+
   gene.list <- c(
-    (gg |> filter(log2FoldChange > 0) |> top_n(n = -top, wt = padj))$Symbol,
+    (gg |> filter(group == "up") |> top_n(n = -top, wt = padj))$Symbol,
     gene.list
   )
   gene.list <- c(
-    (gg |> filter(log2FoldChange < 0) |> top_n(n = -top, wt = padj))$Symbol,
+    (gg |> filter(group == "down") |> top_n(n = -top, wt = padj))$Symbol,
     gene.list
   )
+  gene.list <- unique(gene.list)
   index <- match(gene.list, gg$Symbol)
   index <- na.omit(index)
-  gg$group <- "no"
-  gg[gg$log2FoldChange > log2(fc) & gg$padj < pv, ]$group <- "up"
-  gg[gg$log2FoldChange < -log2(fc) & gg$padj < pv, ]$group <- "down"
   gg$color <- gg$group
   gg$color[index] <- "black"
   # mycolour = c("grey", "#A81E2C","#08537C", "black")
@@ -329,6 +413,9 @@ volcano_plot_Deseq2 <- function(
   p <- p + scale_fill_manual(values = mycolour)
   p <- p + geom_hline(yintercept = -log10(pv), linetype = "dotted")
   p <- p + geom_vline(xintercept = c(-log2(fc), log2(fc)), linetype = "dotted")
+  p <- p + labs(
+    subtitle = paste0("Significant genes | Up: ", up_n, "  Down: ", dw_n)
+  )
   p <- p +
     ggrepel::geom_text_repel(
       aes(label = label, color = group),

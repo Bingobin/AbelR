@@ -477,6 +477,124 @@ gsea_plot_custorm <- function(gsea_ob, select_term, color, xpos = 3000) {
 }
 
 
+#' Plot selected GSEA pathways as a dot plot
+#'
+#' Selects the most significant pathways from a GSEA result and combines them
+#' with optional user-specified pathways. Point size represents adjusted
+#' P-value significance, while colour represents normalized enrichment score.
+#'
+#' @param gsea_result A `clusterProfiler` GSEA result object or a data frame
+#'   containing `Description`, `NES`, `pvalue`, and `p.adjust`.
+#' @param top_n Number of pathways with the smallest adjusted P values (or raw
+#'   P values when adjusted P values are unavailable) to include automatically.
+#'   Set to `0` or `NULL` to use only `label_pathways`.
+#' @param label_pathways Optional character vector of pathway descriptions to
+#'   include.
+#'
+#' @return A [ggplot2::ggplot] object.
+#' @export
+plot_gsea_dotplot <- function(
+  gsea_result,
+  top_n = 20,
+  label_pathways = NULL
+) {
+  gsea_result <- tryCatch(
+    as.data.frame(gsea_result),
+    error = function(e) {
+      stop(
+        "gsea_result must be coercible to a data frame: ",
+        conditionMessage(e)
+      )
+    }
+  )
+
+  required_cols <- c("Description", "NES", "pvalue", "p.adjust")
+  missing_cols <- setdiff(required_cols, colnames(gsea_result))
+  if (length(missing_cols) > 0) {
+    stop(
+      "gsea_result is missing required columns: ",
+      paste(missing_cols, collapse = ", ")
+    )
+  }
+
+  if (
+    !is.null(top_n) &&
+      (
+        length(top_n) != 1 ||
+          !is.numeric(top_n) ||
+          is.na(top_n) ||
+          !is.finite(top_n) ||
+          top_n < 0
+      )
+  ) {
+    stop("top_n must be NULL or one non-negative number.")
+  }
+
+  label_pathways <- unique(as.character(label_pathways))
+  label_pathways <- label_pathways[
+    !is.na(label_pathways) & nzchar(label_pathways)
+  ]
+
+  if (!is.null(top_n) && top_n > 0) {
+    rank_cols <- intersect(c("p.adjust", "pvalue"), colnames(gsea_result))
+    if (length(rank_cols) > 0) {
+      rank_col <- rank_cols[1]
+      ranked_result <- gsea_result[
+        !is.na(gsea_result[[rank_col]]),
+        ,
+        drop = FALSE
+      ]
+      ranked_result <- ranked_result[
+        order(ranked_result[[rank_col]]),
+        ,
+        drop = FALSE
+      ]
+      top_pathways <- utils::head(
+        ranked_result$Description,
+        n = as.integer(top_n)
+      )
+      label_pathways <- unique(c(label_pathways, top_pathways))
+    }
+  }
+
+  if (length(label_pathways) == 0) {
+    stop(
+      "No pathways were selected. Use top_n > 0 or provide label_pathways."
+    )
+  }
+
+  gsea.plot <- gsea_result[
+    gsea_result$Description %in% label_pathways,
+    required_cols,
+    drop = FALSE
+  ]
+  if (nrow(gsea.plot) == 0) {
+    stop("None of label_pathways were found in gsea_result$Description.")
+  }
+
+  gsea.plot$Group <- ifelse(gsea.plot$NES < 0, "Down", "Up")
+  gsea.plot$Label <- "GSEA"
+
+  ggplot2::ggplot(
+    gsea.plot,
+    ggplot2::aes(
+      x = Label,
+      y = forcats::fct_reorder(Description, -log10(p.adjust))
+    )
+  ) +
+    ggplot2::geom_point(
+      ggplot2::aes(size = -log10(p.adjust), color = NES)
+    ) +
+    ggplot2::theme_test() +
+    ggplot2::scale_color_gradient2(
+      low = "#08306B",
+      mid = "grey90",
+      high = "#67000D"
+    ) +
+    ggplot2::theme(axis.text.x = ggplot2::element_blank())
+}
+
+
 #' Draw a customized GO enrichment dot plot
 #'
 #' Selects terms from an enrichment result, calculates gene counts, caps very

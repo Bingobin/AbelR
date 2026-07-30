@@ -51,7 +51,9 @@ A \link[ggplot2:ggplot]{ggplot2::ggplot} object.
 \description{
 Creates a volcano plot from a DESeq2 result table, classifies significantly
 upregulated and downregulated genes, and labels selected genes together with
-the most significant genes in each direction.
+the most significant genes in each direction. The plot is still returned
+when either or both DEG directions are empty; counts are reported in a
+message and in the plot subtitle.
 }
 \seealso{
 \code{\link[=target_for_volcano]{target_for_volcano()}}

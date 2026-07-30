@@ -23,10 +23,13 @@ plot_deg_heatmap_for_DEGseq2(
 }
 \value{
 Invisibly returns the \link[ComplexHeatmap:Heatmap]{ComplexHeatmap::Heatmap} object after drawing
-it on the active graphics device.
+it on the active graphics device, or \code{NULL} when fewer than two genes are
+available.
 }
 \description{
 Extracts variance-stabilized expression for significant genes, scales each
 gene across samples, labels selected and top-ranked genes, and draws a
-ComplexHeatmap with sample-group annotation.
+ComplexHeatmap with sample-group annotation. A message is shown when either
+direction has no genes; the heatmap is skipped when fewer than two genes are
+available.
 }

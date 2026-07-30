@@ -10,7 +10,8 @@ target_for_volcano(
   n = 5000,
   pc = FALSE,
   pv = 0.05,
-  fc = 1.5
+  fc = 1.5,
+  p_col = "padj"
 )
 }
 \arguments{
@@ -19,13 +20,15 @@ target_for_volcano(
 
 \item{gene.list}{Character vector of gene symbols that must be retained.}
 
-\item{n}{Number of nonsignificant background genes to sample.}
+\item{n}{Maximum number of nonsignificant background genes to sample.}
 
 \item{pc}{Logical; restrict candidates to protein-coding genes.}
 
 \item{pv}{Adjusted P-value threshold.}
 
 \item{fc}{Fold-change threshold on the linear scale.}
+
+\item{p_col}{Significance column used to select genes.}
 }
 \value{
 A character vector of selected gene symbols.
