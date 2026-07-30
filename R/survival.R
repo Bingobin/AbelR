@@ -376,3 +376,228 @@ plot_roc_curve <- function(risk.df) {
       axis.line = element_blank()
     )
 }
+
+
+#' Plot odds ratios from logistic regression
+#'
+#' Fits a multivariable binary logistic regression model, extracts odds ratios
+#' with Wald confidence intervals, and draws a forest plot. Predictor names and
+#' display labels are supplied by the caller, so the function can be used with
+#' UK Biobank data or other cohort data.
+#'
+#' @param data A data frame containing the outcome and predictor variables.
+#' @param outcome Character scalar naming a binary outcome column. Numeric
+#'   outcomes must be coded as `0` and `1`; logical and two-level factor
+#'   outcomes are also supported.
+#' @param predictors Character vector naming predictor columns.
+#' @param term_labels Optional named character vector used to relabel model
+#'   coefficient terms. Names must be coefficient names, including factor
+#'   levels where applicable, and values are the labels displayed in the plot.
+#' @param conf_level Confidence level for the Wald confidence intervals.
+#' @param digits Number of decimal places used in plot labels.
+#' @param point_color Color used for points and confidence intervals.
+#' @param title Optional plot title. By default, the outcome name is shown.
+#' @param show_labels Logical; if `TRUE`, display odds ratios, confidence
+#'   intervals, and significance symbols beside the estimates.
+#'
+#' @return A list containing `model`, the fitted [stats::glm()] object; `or`, a
+#'   data frame of coefficient-level odds ratios and confidence intervals; and
+#'   `plot`, the forest plot.
+#'
+#' @examples
+#' fit <- plot_logistic_forest(
+#'   data = mtcars,
+#'   outcome = "am",
+#'   predictors = c("wt", "hp"),
+#'   term_labels = c(
+#'     wt = "Weight (1000 lbs)",
+#'     hp = "Horsepower"
+#'   )
+#' )
+#' fit$or
+#' fit$plot
+#'
+#' @export
+plot_logistic_forest <- function(
+  data,
+  outcome,
+  predictors,
+  term_labels = NULL,
+  conf_level = 0.95,
+  digits = 2,
+  point_color = "firebrick",
+  title = NULL,
+  show_labels = TRUE
+) {
+  if (!is.data.frame(data)) {
+    stop("data must be a data frame.")
+  }
+  if (!is.character(outcome) || length(outcome) != 1L || is.na(outcome)) {
+    stop("outcome must be a single, non-missing column name.")
+  }
+  if (!is.character(predictors) || length(predictors) == 0L) {
+    stop("predictors must be a non-empty character vector.")
+  }
+
+  predictors <- unique(predictors)
+  required_cols <- c(outcome, predictors)
+  missing_cols <- setdiff(required_cols, colnames(data))
+  if (length(missing_cols) > 0L) {
+    stop(
+      "The following columns are missing from data: ",
+      paste(missing_cols, collapse = ", ")
+    )
+  }
+  if (outcome %in% predictors) {
+    stop("outcome must not also be included in predictors.")
+  }
+  if (!is.numeric(conf_level) ||
+      length(conf_level) != 1L ||
+      is.na(conf_level) ||
+      conf_level <= 0 ||
+      conf_level >= 1) {
+    stop("conf_level must be a single number between 0 and 1.")
+  }
+  if (!is.numeric(digits) ||
+      length(digits) != 1L ||
+      is.na(digits) ||
+      digits < 0 ||
+      digits != as.integer(digits)) {
+    stop("digits must be a non-negative integer.")
+  }
+  if (!is.logical(show_labels) ||
+      length(show_labels) != 1L ||
+      is.na(show_labels)) {
+    stop("show_labels must be TRUE or FALSE.")
+  }
+  if (!is.null(term_labels) &&
+      (!is.character(term_labels) ||
+       is.null(names(term_labels)) ||
+       any(names(term_labels) == ""))) {
+    stop("term_labels must be a named character vector.")
+  }
+
+  outcome_values <- data[[outcome]]
+  observed_outcome <- outcome_values[!is.na(outcome_values)]
+  valid_outcome <- if (is.factor(observed_outcome)) {
+    nlevels(droplevels(observed_outcome)) == 2L
+  } else if (is.logical(observed_outcome)) {
+    length(unique(observed_outcome)) == 2L
+  } else if (is.numeric(observed_outcome) || is.integer(observed_outcome)) {
+    length(unique(observed_outcome)) == 2L &&
+      all(unique(observed_outcome) %in% c(0, 1))
+  } else {
+    FALSE
+  }
+  if (!valid_outcome) {
+    stop(
+      "outcome must contain two observed levels; numeric outcomes must use ",
+      "0 and 1."
+    )
+  }
+
+  fit <- stats::glm(
+    formula = stats::reformulate(predictors, response = outcome),
+    data = data,
+    family = stats::binomial()
+  )
+
+  coef_matrix <- summary(fit)$coefficients
+  coef_names <- setdiff(rownames(coef_matrix), "(Intercept)")
+  if (length(coef_names) == 0L) {
+    stop("The fitted model contains no non-intercept coefficients.")
+  }
+
+  z_value <- stats::qnorm(1 - (1 - conf_level) / 2)
+  estimates <- coef_matrix[coef_names, "Estimate"]
+  standard_errors <- coef_matrix[coef_names, "Std. Error"]
+  p_values <- coef_matrix[coef_names, "Pr(>|z|)"]
+
+  result <- data.frame(
+    term = coef_names,
+    estimate = exp(estimates),
+    conf.low = exp(estimates - z_value * standard_errors),
+    conf.high = exp(estimates + z_value * standard_errors),
+    p.value = p_values,
+    stringsAsFactors = FALSE,
+    row.names = coef_names
+  )
+
+  result$display_term <- result$term
+  if (!is.null(term_labels)) {
+    matched_terms <- intersect(result$term, names(term_labels))
+    result$display_term[match(matched_terms, result$term)] <-
+      unname(term_labels[matched_terms])
+  }
+
+  result$stars <- ifelse(
+    is.na(result$p.value),
+    NA_character_,
+    ifelse(
+      result$p.value < 0.0001,
+      "****",
+      ifelse(
+        result$p.value < 0.001,
+        "***",
+        ifelse(
+          result$p.value < 0.01,
+          "**",
+          ifelse(result$p.value < 0.05, "*", "ns")
+        )
+      )
+    )
+  )
+  result$label <- paste0(
+    "OR=",
+    formatC(result$estimate, format = "f", digits = digits),
+    " [",
+    formatC(result$conf.low, format = "f", digits = digits),
+    "-",
+    formatC(result$conf.high, format = "f", digits = digits),
+    "] ",
+    result$stars
+  )
+
+  if (is.null(title)) {
+    title <- paste0("Logistic regression (", outcome, ")")
+  }
+
+  plot <- ggplot(
+    result,
+    aes(
+      x = stats::reorder(display_term, estimate),
+      y = estimate,
+      ymin = conf.low,
+      ymax = conf.high
+    )
+  ) +
+    geom_pointrange(color = point_color) +
+    geom_hline(yintercept = 1, linetype = 2, color = "grey50") +
+    coord_flip() +
+    labs(
+      y = paste0(
+        "Odds Ratio (",
+        round(conf_level * 100),
+        "% CI)"
+      ),
+      x = NULL,
+      title = title
+    ) +
+    theme_test()
+
+  if (show_labels) {
+    plot <- plot +
+      geom_text(
+        aes(label = label),
+        vjust = -1.2,
+        color = "black",
+        na.rm = TRUE
+      )
+  }
+
+  list(
+    model = fit,
+    or = result,
+    plot = plot
+  )
+}

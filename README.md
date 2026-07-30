@@ -122,6 +122,7 @@ Source: `R/survival.R`
 | `Risk_model_df()` | Combine selected-gene expression with survival metadata to prepare a risk-model data frame. |
 | `plot_survial_risk()` | Plot ranked risk scores together with patient survival status. |
 | `plot_roc_curve()` | Plot time-dependent survival ROC curves from a risk-score data set. |
+| `plot_logistic_forest()` | Fit a binary logistic regression model and plot coefficient-level odds ratios with confidence intervals. |
 
 ### Enrichment and gene-set analysis
 
@@ -172,23 +173,9 @@ Source: `R/scrna.R`
 | `filter_seurat_qc()` | Filter a Seurat object using configurable feature, count, mitochondrial-content, and doublet thresholds. |
 | `scRNA_SCT_norm()` | Run a Seurat v5 SCT and RPCA integration workflow after splitting RNA layers by a configurable sample column. |
 | `run_cytotrace2_by_sample()` | Run CytoTRACE2 independently for each sample and combine the resulting cell-level metadata. |
-| `scTYPE_annotation()` | Annotate Seurat clusters using an explicit scTYPE directory or `AbelR.sctype_dir` option. |
-
-### Trajectory analysis
-
-Source: `R/monocle3.R`
-
-| Function | Description |
-|---|---|
 | `run_monocle3_from_seurat_umap()` | Build a Monocle3 cell-data set using Seurat metadata and UMAP coordinates, learn a trajectory, and optionally order cells from selected root clusters. |
-
-### Cell-cell communication
-
-Source: `R/cellchat.R`
-
-| Function | Description |
-|---|---|
 | `Build_CellChat_object()` | Build and run a human or mouse CellChat workflow from a Seurat expression layer and metadata. |
+| `scTYPE_annotation()` | Annotate Seurat clusters using an explicit scTYPE directory or `AbelR.sctype_dir` option. |
 
 ## Optional dependencies and external resources
 

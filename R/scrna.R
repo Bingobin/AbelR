@@ -377,3 +377,428 @@ scTYPE_annotation <- function(
 
   return(result)
 }
+
+
+# CytoTRACE2 analysis ------------------------------------------------------
+
+#' Run CytoTRACE2 separately for each sample
+#'
+#' Splits a Seurat object by sample, runs CytoTRACE2 independently for each
+#' sample, and combines the resulting CytoTRACE2 metadata. Full per-sample
+#' Seurat result objects are retained only when requested to reduce memory use
+#' during long server jobs.
+#'
+#' @param seu A Seurat object containing the expression assay and sample
+#'   metadata.
+#' @param sample_col Metadata column identifying samples.
+#' @param assay Seurat assay used by CytoTRACE2.
+#' @param slot_type Expression slot or layer requested by CytoTRACE2, commonly
+#'   `"counts"`.
+#' @param species Species accepted by CytoTRACE2; `"human"` or `"mouse"`.
+#' @param ncores Number of cores passed to CytoTRACE2 for each sample.
+#' @param subset_col Optional metadata column used to subset cells before the
+#'   per-sample analysis.
+#' @param subset_values Optional character vector of values retained from
+#'   `subset_col`.
+#' @param keep_result_list Logical; retain complete CytoTRACE2 Seurat objects in
+#'   the returned `results` component.
+#' @param verbose Logical; report samples, cell counts, and progress.
+#'
+#' @return A list with `metadata`, the combined cell-level CytoTRACE2 metadata,
+#'   and `results`, the optional named list of complete per-sample results.
+#' @export
+run_cytotrace2_by_sample <- function(
+  seu,
+  sample_col = "SampleID",
+  assay = "RNA",
+  slot_type = "counts",
+  species = c("human", "mouse"),
+  ncores = 4,
+  subset_col = NULL,
+  subset_values = NULL,
+  keep_result_list = FALSE,
+  verbose = TRUE
+) {
+  species <- match.arg(species)
+  if (!requireNamespace("CytoTRACE2", quietly = TRUE)) {
+    stop("Package 'CytoTRACE2' is required for this analysis.")
+  }
+  if (!inherits(seu, "Seurat")) {
+    stop("seu must be a Seurat object.")
+  }
+  if (!sample_col %in% colnames(seu@meta.data)) {
+    stop("sample_col not found in seu@meta.data: ", sample_col)
+  }
+  if (!assay %in% names(seu@assays)) {
+    stop("assay not found in Seurat object: ", assay)
+  }
+  if (!is.numeric(ncores) || length(ncores) != 1 || ncores < 1) {
+    stop("ncores must be a positive number.")
+  }
+  if (xor(is.null(subset_col), is.null(subset_values))) {
+    stop("subset_col and subset_values must be supplied together.")
+  }
+
+  SeuratObject::DefaultAssay(seu) <- assay
+  if (!is.null(subset_col)) {
+    if (!subset_col %in% colnames(seu@meta.data)) {
+      stop("subset_col not found in seu@meta.data: ", subset_col)
+    }
+    cells_use <- rownames(seu@meta.data)[
+      seu@meta.data[[subset_col]] %in% subset_values
+    ]
+    if (!length(cells_use)) {
+      stop(
+        "No cells retained for ",
+        subset_col,
+        " in: ",
+        paste(subset_values, collapse = ", ")
+      )
+    }
+    seu <- subset(seu, cells = cells_use)
+  }
+
+  samples <- unique(as.character(seu@meta.data[[sample_col]]))
+  samples <- samples[!is.na(samples) & nzchar(samples)]
+  if (!length(samples)) {
+    stop("No valid sample identifiers found in metadata column: ", sample_col)
+  }
+  if (verbose) {
+    message("CytoTRACE2 samples (n = ", length(samples), "): ")
+    message(paste(samples, collapse = ", "))
+  }
+
+  metadata_list <- vector("list", length(samples))
+  names(metadata_list) <- samples
+  result_list <- if (isTRUE(keep_result_list)) {
+    vector("list", length(samples))
+  } else {
+    NULL
+  }
+  if (!is.null(result_list)) {
+    names(result_list) <- samples
+  }
+
+  for (sample_id in samples) {
+    cells <- rownames(seu@meta.data)[
+      as.character(seu@meta.data[[sample_col]]) == sample_id
+    ]
+    if (verbose) {
+      message(
+        "Running CytoTRACE2: ",
+        sample_id,
+        " (",
+        length(cells),
+        " cells)"
+      )
+    }
+    seu_sub <- subset(seu, cells = cells)
+    SeuratObject::DefaultAssay(seu_sub) <- assay
+    result <- CytoTRACE2::cytotrace2(
+      seu_sub,
+      is_seurat = TRUE,
+      slot_type = slot_type,
+      species = species,
+      ncores = as.integer(ncores)
+    )
+    cols_use <- grep("CytoTRACE2", colnames(result@meta.data), value = TRUE)
+    if (!length(cols_use)) {
+      stop("No CytoTRACE2 metadata columns produced for sample: ", sample_id)
+    }
+    sample_metadata <- result@meta.data[, cols_use, drop = FALSE]
+    sample_metadata[[sample_col]] <- sample_id
+    sample_metadata$cell_barcode <- rownames(sample_metadata)
+    metadata_list[[sample_id]] <- sample_metadata
+
+    if (isTRUE(keep_result_list)) {
+      result_list[[sample_id]] <- result
+    }
+    rm(seu_sub, result, sample_metadata)
+    invisible(gc())
+  }
+
+  metadata <- do.call(rbind, metadata_list)
+  list(metadata = metadata, results = result_list)
+}
+
+
+# Monocle3 trajectory analysis --------------------------------------------
+
+#' Build a Monocle3 trajectory from a Seurat object
+#'
+#' Creates a Monocle3 cell-data set from a Seurat assay, preprocesses and
+#' optionally aligns it, reuses an existing Seurat UMAP embedding, learns a
+#' principal graph, and optionally orders cells from selected root clusters.
+#'
+#' @param seu A Seurat object providing counts and cell metadata.
+#' @param ref_seu Optional Seurat object providing the reference embedding. If
+#'   `NULL`, `seu` is used.
+#' @param assay Assay from which expression values are extracted.
+#' @param layer Assay layer containing the count matrix.
+#' @param reduction Name of the Seurat dimensional reduction to reuse.
+#' @param alignment_group Metadata column used by `monocle3::align_cds()`. Set
+#'   to `NULL` to skip alignment.
+#' @param seurat_cluster_col Metadata column containing cluster labels.
+#' @param root_clusters Optional cluster labels used to select trajectory root
+#'   cells. If `NULL`, cells are not ordered.
+#' @param num_dim Number of dimensions used during Monocle3 preprocessing.
+#' @param use_partition Logical passed to `monocle3::learn_graph()`.
+#' @param cluster_cells_first Logical; run `monocle3::cluster_cells()` before
+#'   graph learning.
+#'
+#' @return A Monocle3 `cell_data_set` object.
+#' @export
+run_monocle3_from_seurat_umap <- function(
+  seu,
+  ref_seu = NULL,
+  assay = "SCT",
+  layer = "counts",
+  reduction = "umap",
+  alignment_group = "SampleID",
+  seurat_cluster_col = "seurat_clusters",
+  root_clusters = NULL,
+  num_dim = 50,
+  use_partition = FALSE,
+  cluster_cells_first = TRUE
+) {
+  for (pkg in c("monocle3", "SingleCellExperiment", "SummarizedExperiment")) {
+    if (!requireNamespace(pkg, quietly = TRUE)) {
+      stop("Package '", pkg, "' is required for this analysis.")
+    }
+  }
+  # 1. prepare counts
+  counts <- Seurat::GetAssayData(
+    seu,
+    assay = assay,
+    layer = layer
+  )
+  gene_anno <- data.frame(
+    gene_short_name = rownames(counts),
+    row.names = rownames(counts)
+  )
+  cell_meta <- seu@meta.data
+  # make sure rownames of metadata match cells
+  cell_meta <- cell_meta[colnames(counts), , drop = FALSE]
+  cds <- monocle3::new_cell_data_set(
+    counts,
+    cell_metadata = cell_meta,
+    gene_metadata = gene_anno
+  )
+  # 2. preprocess and align
+  cds <- monocle3::preprocess_cds(
+    cds,
+    num_dim = num_dim
+  )
+  if (!is.null(alignment_group)) {
+    if (!alignment_group %in% colnames(SummarizedExperiment::colData(cds))) {
+      stop("alignment_group not found in cell metadata: ", alignment_group)
+    }
+    cds <- monocle3::align_cds(
+      cds,
+      alignment_group = alignment_group
+    )
+  }
+  # 3. use external Seurat UMAP
+  if (is.null(ref_seu)) {
+    ref_seu <- seu
+  }
+  if (!reduction %in% Seurat::Reductions(ref_seu)) {
+    stop("Reduction not found in ref_seu: ", reduction)
+  }
+  umap_coord <- Seurat::Embeddings(ref_seu, reduction = reduction)
+  missing_cells <- setdiff(colnames(cds), rownames(umap_coord))
+  if (length(missing_cells) > 0) {
+    stop(
+      "Some cells in cds are missing from reference UMAP coordinates. n = ",
+      length(missing_cells)
+    )
+  }
+  umap_coord <- umap_coord[colnames(cds), , drop = FALSE]
+  SingleCellExperiment::reducedDims(cds)$UMAP <- umap_coord
+  # 4. cluster and learn graph
+  if (cluster_cells_first) {
+    cds <- monocle3::cluster_cells(
+      cds,
+      reduction_method = "UMAP"
+    )
+  }
+  cds <- monocle3::learn_graph(
+    cds,
+    use_partition = use_partition
+  )
+  # 5. order cells
+  if (!is.null(root_clusters)) {
+    if (!seurat_cluster_col %in% colnames(SummarizedExperiment::colData(cds))) {
+      stop("seurat_cluster_col not found in metadata: ", seurat_cluster_col)
+    }
+    root_cells <- colnames(cds)[
+      as.character(SummarizedExperiment::colData(cds)[[seurat_cluster_col]]) %in%
+        as.character(root_clusters)
+    ]
+    if (length(root_cells) == 0) {
+      stop("No root cells found. Check root_clusters and seurat_cluster_col.")
+    }
+    cds <- monocle3::order_cells(
+      cds,
+      root_cells = root_cells
+    )
+  }
+  return(cds)
+}
+
+
+# CellChat analysis -------------------------------------------------------
+
+#' Build and run a CellChat analysis
+#'
+#' Extracts a normalized expression layer and metadata from a Seurat object,
+#' selects the human or mouse CellChat database, identifies overexpressed
+#' ligand-receptor genes and interactions, and computes communication networks
+#' and pathway centrality.
+#'
+#' @param seu A Seurat object with normalized expression and cell metadata.
+#' @param species Species matching the expression matrix and CellChat database;
+#'   either `"human"` or `"mouse"`.
+#' @param group.by Metadata column defining the cell groups used by CellChat.
+#' @param sample.by Metadata column identifying samples or replicates.
+#' @param cluster.by Optional metadata column copied to `meta$clusters`.
+#' @param assay Seurat assay from which expression data are extracted.
+#' @param layer Normalized expression layer passed to CellChat.
+#' @param min.cells Minimum number of cells required for retained communication.
+#' @param workers_overexpress Number of future workers used during
+#'   overexpression analysis.
+#' @param workers_prob Number of future workers used for communication
+#'   probability calculations.
+#' @param maxSize Maximum allowed future global size in bytes.
+#' @param type Averaging method passed to `CellChat::computeCommunProb()`.
+#' @param use_parallel Logical; use multisession parallel processing.
+#' @param verbose Logical; print input summaries and progress messages.
+#'
+#' @return A processed CellChat object.
+#' @export
+Build_CellChat_object <- function(
+  seu,
+  species = c("human", "mouse"),
+  group.by = "CellType",
+  sample.by = "SampleID",
+  cluster.by = NULL,
+  assay = "RNA",
+  layer = "data",
+  min.cells = 10,
+  workers_overexpress = 6,
+  workers_prob = 2,
+  maxSize = 40 * 1024^3,
+  type = "triMean",
+  use_parallel = TRUE,
+  verbose = TRUE
+) {
+  species <- match.arg(species)
+  for (pkg in c("Seurat", "CellChat", "future")) {
+    if (!requireNamespace(pkg, quietly = TRUE)) {
+      stop("Package '", pkg, "' is required for Build_CellChat_object().")
+    }
+  }
+  if (!group.by %in% colnames(seu@meta.data)) {
+    stop("group.by column not found in seu@meta.data: ", group.by)
+  }
+  if (!sample.by %in% colnames(seu@meta.data)) {
+    stop("sample.by column not found in seu@meta.data: ", sample.by)
+  }
+  if (!is.null(cluster.by) && !cluster.by %in% colnames(seu@meta.data)) {
+    stop("cluster.by column not found in seu@meta.data: ", cluster.by)
+  }
+  data.input <- GetAssayData(
+    seu,
+    assay = assay,
+    layer = layer
+  )
+  meta <- data.frame(
+    labels = seu@meta.data[[group.by]],
+    samples = seu@meta.data[[sample.by]],
+    row.names = colnames(seu)
+  )
+  if (!is.null(cluster.by)) {
+    meta$clusters <- seu@meta.data[[cluster.by]]
+  }
+  meta$labels <- as.factor(meta$labels)
+  meta$samples <- as.factor(meta$samples)
+  if (verbose) {
+    message("CellChat grouping column: ", group.by)
+    message("Sample column: ", sample.by)
+    message("Number of cells: ", ncol(data.input))
+    message("Number of groups: ", length(unique(meta$labels)))
+    print(table(meta$labels))
+  }
+  cellchat <- createCellChat(
+    object = data.input,
+    meta = meta,
+    group.by = "labels"
+  )
+  if (species == "human") {
+    cellchat@DB <- CellChatDB.human
+  } else {
+    cellchat@DB <- CellChatDB.mouse
+  }
+  message("1. subsetData")
+  print(system.time({
+    cellchat <- subsetData(cellchat)
+  }))
+
+  options(future.globals.maxSize = maxSize)
+  if (use_parallel) {
+    future::plan(future::multisession, workers = workers_overexpress)
+  } else {
+    future::plan(future::sequential)
+  }
+  message("2. identifyOverExpressedGenes")
+  print(system.time({
+    cellchat <- identifyOverExpressedGenes(cellchat)
+  }))
+
+  message("3. identifyOverExpressedInteractions")
+  print(system.time({
+    cellchat <- identifyOverExpressedInteractions(cellchat)
+  }))
+
+  if (use_parallel) {
+    future::plan(future::multisession, workers = workers_prob)
+  } else {
+    future::plan(future::sequential)
+  }
+  message("4. computeCommunProb")
+  print(system.time({
+    cellchat <- computeCommunProb(
+      cellchat,
+      type = type
+    )
+  }))
+
+  message("5. filterCommunication")
+  print(system.time({
+    cellchat <- filterCommunication(
+      cellchat,
+      min.cells = min.cells
+    )
+  }))
+
+  message("6. computeCommunProbPathway")
+  print(system.time({
+    cellchat <- computeCommunProbPathway(cellchat)
+  }))
+
+  message("7. aggregateNet")
+  print(system.time({
+    cellchat <- aggregateNet(cellchat)
+  }))
+
+  message("8. centrality")
+  print(system.time({
+    cellchat <- netAnalysis_computeCentrality(
+      cellchat,
+      slot.name = "netP"
+    )
+  }))
+
+  future::plan(future::sequential)
+  return(cellchat)
+}

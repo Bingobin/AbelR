@@ -1,0 +1,4530 @@
+---
+title: "Untitled"
+output: html_document
+date: "2025-09-03"
+---
+```{r}
+source("~/script/lyb_function.R")
+library(xvhelper)
+library(data.table)
+getwd()
+```
+
+## 01. olink dataframe combind
+```{r}
+instance_0_df <- fread("olink_instance_0.NPX.csv")
+#instance_2_df <- fread("olink_instance_2.NPX.csv")
+#instance_3_df <- fread("olink_instance_3.NPX.csv")
+```
+
+```{r}
+instance_0_ldf <- instance_0_df |> mutate(ins_index = 0) |> pivot_longer(cols = -c(eid, ins_index), names_to = "protein_id", values_to = "result") %>% na.omit()
+instance_2_ldf <- instance_2_df |> mutate(ins_index = 2) |> pivot_longer(cols = -c(eid, ins_index), names_to = "protein_id", values_to = "result") %>% na.omit()
+instance_3_ldf <- instance_3_df |> mutate(ins_index = 3) |> pivot_longer(cols = -c(eid, ins_index), names_to = "protein_id", values_to = "result") %>% na.omit()
+```
+
+
+```{r}
+olink_df <- instance_0_ldf %>% bind_rows(instance_2_ldf, instance_3_ldf)
+```
+
+```{r}
+coding143 <- fread("olink_resources/coding143.tsv") %>% mutate(meaning = str_to_lower(str_replace(meaning, ";.*", "")), meaning = str_replace_all(meaning, "-", "_"))
+```
+
+```{r}
+field_30900_df <- fread("olink_resources/field_30900.csv") %>%
+    select(-participant.p30900_i1) %>%
+    pivot_longer(cols = -c(participant.eid), names_to = "instance", values_to = "N_proteins") %>%
+    filter(!is.na(N_proteins)) %>%
+    mutate(instance = str_remove(instance, "participant.p30900_i"))
+field_30900_df$instance <- as.double(field_30900_df$instance)
+
+field_30901_df <- fread("olink_resources/field_30901.csv") %>%
+    select(-participant.p30901_i1) %>%
+    pivot_longer(cols = -c(participant.eid), names_to = "instance", values_to = "PlateID") %>%
+    filter(!is.na(PlateID)) %>%
+    mutate(instance = str_remove(instance, "participant.p30901_i"),
+          PlateID = as.double(PlateID))
+field_30901_df$instance <- as.double(field_30901_df$instance)
+
+field_30902_df <- fread("olink_resources/field_30902.csv") %>%
+    select(-participant.p30902_i1) %>%
+    pivot_longer(cols = -c(participant.eid), names_to = "instance", values_to = "WellID") %>%
+    filter(WellID != "") %>%
+    mutate(instance = str_remove(instance, "participant.p30902_i"))
+field_30902_df$instance <- as.double(field_30902_df$instance)
+```
+
+```{r}
+field_30900_df |> group_by(instance) |> summarise(n(),mean(N_proteins))
+```
+```{r}
+olink_assay <- fread("olink_resources/olink_assay.dat") %>% mutate(Assay = tolower(Assay))
+olink_assay_version <- fread("olink_resources/olink_assay_version.dat") %>% mutate(Assay = tolower(Assay))
+olink_batch_number <- fread("olink_resources/olink_batch_number.dat") %>% mutate(PlateID = as.double(PlateID))
+olink_limit_of_detection <- fread("olink_resources/olink_limit_of_detection.dat") %>% mutate(Assay = tolower(Assay), PlateID = as.double(PlateID))
+olink_panel_lot_number <- fread("olink_resources/olink_panel_lot_number.dat")
+olink_processing_start_date <- fread("olink_resources/olink_processing_start_date.dat")  %>% mutate(PlateID = as.double(PlateID))
+```
+
+```{r}
+olink_full_dataset_df <- olink_df |> 
+    left_join(field_30900_df, by = c("eid" = "participant.eid", "ins_index" = "instance")) %>%
+    left_join(field_30901_df, by = c("eid" = "participant.eid", "ins_index" = "instance")) %>%
+    left_join(field_30902_df, by = c("eid" = "participant.eid", "ins_index" = "instance")) %>%
+    left_join(coding143, by = c("protein_id" = "meaning")) %>%
+    left_join(olink_limit_of_detection, by = c("protein_id" = "Assay", "ins_index" = "Instance", "PlateID" = "PlateID")) %>%
+    left_join(olink_assay, by = c("protein_id" = "Assay")) %>%
+    left_join(olink_processing_start_date, by = c("PlateID" = "PlateID", "Panel" = "Panel")) %>%
+    left_join(olink_batch_number, by = c("PlateID" = "PlateID")) %>%
+    left_join(olink_panel_lot_number, by = c("Batch" = "Batch", "Panel" = "Panel")) %>%
+    left_join(olink_assay_version, by = c("Panel_Lot_Nr" = "Panel_Lot_Nr", "protein_id" = "Assay"))
+```
+
+```{r}
+#saveRDS(olink_full_dataset_df, file = "/lustre/home/acct-medty/medty-c/project/14.CHIP_UKB/06.ukb_olink/ukb_olink.full_dataset.rds")
+olink_full_dataset_df <- readRDS("/lustre/home/acct-medty/medty-c/project/14.CHIP_UKB/06.ukb_olink/ukb_olink.full_dataset.rds")
+```
+
+## 02. UKB phenotype
+```{r}
+codings_df <- read_csv("app176137_20251017152832.dataset.codings.csv", show_col_types = FALSE)
+data_dict_df <- read_csv("app176137_20251017152832.dataset.data_dictionary.csv", show_col_types = FALSE)
+entity_dict_df <- read_csv("app176137_20251017152832.dataset.entity_dictionary.csv", show_col_types = FALSE)
+
+coded_col_df <- xvhelper::merge_coding_data_dict(coding_dict = codings_df, data_dict = data_dict_df)
+```
+
+### basic clinical info 
+```{r}
+ukb_data_df <- read_csv("ukb_cohort_data.csv", show_col_types = FALSE)
+ukb_data_df.date<- read_csv("ukb_cohort_data2.csv", show_col_types = FALSE)
+ukb_data_df.pc <- read_csv("GWAS_data/ukb.gwas_pheno.csv", show_col_types = FALSE)
+ukb_data_df.pc <- ukb_data_df.pc[,grepl("eid|p22009",colnames(ukb_data_df.pc))]
+ukb_data_df <- ukb_data_df |> inner_join(ukb_data_df.date, by = "participant.eid") |> select(-"participant.p23104_i0")
+ukb_data_df <- ukb_data_df |> inner_join(ukb_data_df.pc, by = "participant.eid")
+```
+
+###  medication
+```{r}
+ukb_data_df.med <- read_csv("Medication/ukb.medication.csv", show_col_types = FALSE)
+statin_codes <- c(
+  1140861958, # simvastatin
+  1141146234, # atorvastatin
+  1141192410, # rosuvastatin
+  1140888648, # pravastatin
+  1140888594  # fluvastatin
+)
+med_cols <- grep("p20003", colnames(ukb_data_df.med), value = TRUE)
+ukb_data_df.med$statin <- apply(ukb_data_df.med[, med_cols], 1, function(x) {
+  any(x %in% statin_codes, na.rm = TRUE)
+})
+
+ukb_data_df.med$statin <- as.integer(ukb_data_df.med$statin)
+
+antidiabetic_codes <- c(
+  1140874646,1140874674,1140874706,1140874744,
+  1141152590,
+  1140884600,
+  1140883066,
+  1141168660,1141173882,
+  1141171646,1141177600,
+  1141189090
+)
+
+ukb_data_df.med$antidiabetic <- apply(ukb_data_df.med[, med_cols], 1, function(x) {
+  any(x %in% antidiabetic_codes, na.rm = TRUE)
+})
+
+ukb_data_df.med$antidiabetic <- as.integer(ukb_data_df.med$antidiabetic)
+
+
+antiplatelet_codes <- c(
+  1140861778, # dipyridamole
+  1140861806, # aspirin 75mg tablet
+  1140864860, # nu-seals aspirin 75mg e/c tablet
+  1140868226, # aspirin
+  1141167844, # dipyridamole+aspirin
+  1141168318  # clopidogrel
+)
+
+anticoagulant_codes <- c(
+  1140861588, # enoxaparin
+  1140861702, # phenindione
+  1140864956, # subcutaneous heparin
+  1140881842, # heparin
+  1140888204, # dalteparin
+  1140888206, # tinzaparin
+  1140888266, # warfarin
+  1140909770, # acenocoumarol
+  1140910832  # sodium warfarin
+)
+
+antithrombotic_code <- c(antiplatelet_codes, anticoagulant_codes)
+ukb_data_df.med$antithrombotic <- apply(ukb_data_df.med[, med_cols], 1, function(x) {
+  any(x %in% antithrombotic_code, na.rm = TRUE)
+})
+ukb_data_df.med$antithrombotic <- as.integer(ukb_data_df.med$antithrombotic)
+
+sum(ukb_data_df.med$statin)
+sum(ukb_data_df.med$antidiabetic)
+sum(ukb_data_df.med$antithrombotic)
+```
+
+
+```{r}
+ukb_med_codes <- read.delim("Medication/coding4.tsv")
+med.df <- data.frame(coding = c(statin_codes,antidiabetic_codes,antithrombotic_code),
+           type = c( rep("statin",length(statin_codes)),
+                     rep("antidiabetic",length(antidiabetic_codes)),
+                     rep("antithrombotic",length(antithrombotic_code)) )
+)
+
+med.df$meaning <- ukb_med_codes$meaning[match(med.df$coding,ukb_med_codes$coding)]
+
+
+med_long <- ukb_data_df.med |>
+  select(participant.eid, all_of(med_cols)) |>
+  pivot_longer(
+    cols = all_of(med_cols),
+    names_to = "med_field",
+    values_to = "med_code"
+  ) |>
+  filter(!is.na(med_code), med_code != "") |>
+  mutate(med_code = as.numeric(med_code)) |>
+  distinct(participant.eid, med_code, .keep_all = TRUE)
+
+med_long <- med_long |>  filter(participant.eid %in% chip_mat.phen.df$eid)
+med_count <- med_long |> count(med_code)
+
+med.df$count <- med_count$n[match(med.df$coding,med_count$med_code)]
+colnames(med.df) <-c("UKB medication code","Medication category", "Medication name", "Number of users")
+med.df
+
+write.table(med.df, "chip_suppl_table_med.tsv", quote = FALSE, sep = "\t", row.names = FALSE)
+```
+
+```{r}
+ukb_data_df <- ukb_data_df |>
+    xvhelper::decode_single(coded_col_df) |>
+    xvhelper::decode_multi_purrr(coded_col_df) |>
+    xvhelper::decode_column_names(coded_col_df, r_clean_names = FALSE)
+
+ukb_data_df$`Participant ID` <- as.integer(ukb_data_df$`Participant ID`)
+```
+
+```{r}
+ukb_data_df |> group_by(`Past tobacco smoking | Instance 0`,`Current tobacco smoking | Instance 0`,`Ever smoked | Instance 0` ) |>  summarise(n())
+#eid BMI Age Sex Smoking
+```
+```{r}
+smoking_eid <- (ukb_data_df |> filter(`Past tobacco smoking | Instance 0` == "Smoked on most or all days" | `Current tobacco smoking | Instance 0` == "Yes, on most or all days"))$`Participant ID`
+```
+
+### sub
+```{r}
+ukb_data_df.s <-  ukb_data_df[,c("Participant ID","Sex","Age when attended assessment centre | Instance 0","Body mass index (BMI) | Instance 0","Date of attending assessment centre | Instance 0","Ever smoked | Instance 0")]
+colnames(ukb_data_df.s) <- c("eid","Sex","Age","BMI","Date","Smoking")
+ukb_data_df.pc <- ukb_data_df.pc |> rename_with(~ gsub("participant.","", .x)) |>  rename_with(~ gsub("p22009_a","pc", .x)) 
+ukb_data_df.s <- ukb_data_df.s |>  inner_join(ukb_data_df.pc, by = c("eid"))
+ukb_data_df.s <- ukb_data_df.s |>  inner_join(ukb_data_df.med[,c("participant.eid","statin","antidiabetic","antithrombotic")], by = c("eid" = "participant.eid" ))
+
+#ukb_data_df.s$Smoking <- "no"
+#ukb_data_df.s[ukb_data_df.s$eid %in% smoking_eid,]$Smoking <- "yes"
+
+ukb_data_df.s |> group_by(Sex,Smoking) |> summarise(n())
+ukb_data_df.s |> group_by(statin,antidiabetic) |> summarise(n())
+```
+```{r}
+ukb_data_df  |> count(Sex)
+ggplot(ukb_data_df, aes(x=`Age at recruitment`)) + geom_density(fill = "#08537C", alpha = 0.2, color = "#08537C") + theme_test()
+```
+### Blood count
+```{r}
+ukb_blood_count_df <- read_csv("ukb.blood_count.csv", show_col_types = FALSE)
+data_dict_df.blood_count <- data_dict_df |> mutate(ent_field = paste0(entity,".",name)) |> filter(ent_field %in% colnames(ukb_blood_count_df)) |> mutate(ent_name = paste0(title,"(",units,")"))
+
+data_dict_df.blood_count$ent_name_s  <- c("eid", "WBC (×10⁹/L)", "RBC (×10¹²/L)", "Hb (g/dL)", "HCT (%)", "MCV (fL)", "MCH (pg)", "MCHC (g/dL)", "RDW (%)", "PLT (×10⁹/L)", "PCT (%)", "MPV (fL)", "PDW (%)", "Lymphocytes (×10⁹/L)", "Monocytes (×10⁹/L)", "Neutrophils (×10⁹/L)", "Eosinophils (×10⁹/L)", "Basophils (×10⁹/L)", "NRBC (×10⁹/L)", "Lymphocytes (%)", "Monocytes (%)", "Neutrophils (%)", "Eosinophils (%)", "Basophils (%)", "NRBC (%)", "Reticulocytes (%)", "Reticulocytes (×10¹²/L)", "Mean Reticulocyte Volume (fL)", "Mean Sphered Cell Volume (fL)", "Immature Reticulocyte Fraction (ratio)", "High Light Scatter Reticulocytes (%)", "High Light Scatter Reticulocytes (×10¹²/L)")
+
+data_dict_df.blood_count$ent_id  <- c("eid", "WBC_10e9_L", "RBC_10e12_L", "Hb_g_dL", "HCT_pct", "MCV_fL", "MCH_pg", "MCHC_g_dL", "RDW_pct", "PLT_10e9_L", "PCT_pct", "MPV_fL","PDW_pct","Lymphocytes_10e9_L","Monocytes_10e9_L","Neutrophils_10e9_L","Eosinophils_10e9_L","Basophils_10e9_L","NRBC_10e9_L","Lymphocytes_pct","Monocytes_pct","Neutrophils_pct","Eosinophils_pct","Basophils_pct","NRBC_pct","Reticulocytes_pct","Reticulocytes_10e12_L","Mean_Reticulocyte_Volume_fL","Mean_Sphered_Cell_Volume_fL","Immature_Reticulocyte_Fraction_ratio","High_Light_Scatter_Reticulocytes_pct","High_Light_Scatter_Reticulocytes_10e12_L")
+
+index <- match(colnames(ukb_blood_count_df),data_dict_df.blood_count$ent_field)
+colnames(ukb_blood_count_df) <- data_dict_df.blood_count$ent_id[index]
+ukb_blood_count_df <- ukb_blood_count_df[,data_dict_df.blood_count$ent_id]
+colnames(ukb_blood_count_df) 
+```
+
+```{r}
+ukb_blood_count_df <- ukb_blood_count_df[rowSums(is.na(ukb_blood_count_df)) < 31,]
+```
+
+### Serum biochemistry
+```{r}
+tmp.df.list <- lapply(0:9, function(x){
+    df <- read.csv(paste0("Bio_chemistry/ukb.bio_chemistry.0",x,".csv"),na.strings = c("", "NA"))
+    return(df)
+})
+
+ukb.biochem.df <- purrr::reduce(tmp.df.list, full_join, by = "participant.eid")
+rm(tmp.df.list)
+
+data_dict_df.biochem <- data_dict_df |> mutate(ent_field = paste0(entity,".",name)) |> 
+  filter(ent_field %in% colnames(ukb.biochem.df)) |> filter(type %in% c("string","float")) |> 
+  filter(name != "p30897_i0") |>  mutate(ent_name = paste0(title,"(",units,")"))
+
+data_dict_df.biochem$ent_id <- c("eid", "ALB","ALP","ALT","APOA","APOB","AST","DBIL", "UREA","CALC","CHOL","CREA","CRP","CYSC","GGT","GLU","HbA1c","HDL","IGF-1","LDL","LP-a","OEST","PHOS","RF","SHBG","TBIL","TEST","TP","TRIG","UA","VITD")
+
+data_dict_df.biochem$ent_name[1] <- "eid"
+data_dict_df.biochem$ent_name <- sub(" \\| Instance 0","",data_dict_df.biochem$ent_name)
+data_dict_df.biochem$ent_name <- gsub(" ","_",data_dict_df.biochem$ent_name)
+
+index <- match(data_dict_df.biochem$ent_field,colnames(ukb.biochem.df))
+ukb.biochem.df <- ukb.biochem.df[,index]
+#colnames(ukb.biochem.df) <- data_dict_df.biochem$ent_id
+colnames(ukb.biochem.df) <- data_dict_df.biochem$ent_name
+```
+
+```{r}
+ukb.biochem.df <- ukb.biochem.df[rowSums(is.na(ukb.biochem.df)) < 30,]
+```
+
+### NMR metabolomics
+```{r}
+ukb_metabolic_df <- read_csv("ukb.NMR_meta.csv", show_col_types = FALSE)
+
+data_dict_df.metabolic <- data_dict_df |> mutate(ent_field = paste0(entity,".",name)) |> filter(ent_field %in% colnames(ukb_metabolic_df)) |> mutate(ent_name = paste0(title,"(",units,")"))
+
+data_dict_df.metabolic |> group_by(units) |> summarise(n())
+
+ent_name.list <- gsub("\\| Instance 0","",data_dict_df.metabolic$ent_name)
+ent_name.list <- gsub(" percentage","",ent_name.list)
+ent_name.list <- gsub("percent","%",ent_name.list)
+ent_name.list <- gsub(" \\(ratio\\)","",ent_name.list)
+ent_name.list <- gsub(" \\(degree\\)","",ent_name.list)
+ent_name.list[1] <- "eid"
+data_dict_df.metabolic$ent_name <- ent_name.list
+
+index <- match(colnames(ukb_metabolic_df),data_dict_df.metabolic$ent_field)
+colnames(ukb_metabolic_df) <- data_dict_df.metabolic$ent_name[index]
+ukb_metabolic_df <- ukb_metabolic_df[,data_dict_df.metabolic$ent_name]
+
+#colnames(ukb_metabolic_df)
+table(rowSums(is.na(ukb_metabolic_df)))
+ukb_metabolic_df <- ukb_metabolic_df[rowSums(is.na(ukb_metabolic_df)) < 251 * (1 - 0.8),]
+dim(ukb_metabolic_df)
+```
+
+
+### ICD10
+
+```{r}
+#data_ICD10_A <- ukb.icd10.df |>
+#  filter(grepl("^A", `Diagnoses - main ICD10`)) |>
+#  count(`Diagnoses - main ICD10`) |>
+#  arrange(desc(n)) |>
+#  gt::gt()
+
+##########input
+#ukb.icd10.date.df <- read.delim2("Disease_record/ukb.main_ICD10.csv", sep = ",")
+ukb.icd10.date.df <- read.delim2("Disease_record/ukb.ICD10.csv", sep = ",")
+ukb.icd10.date.df <- ukb.icd10.date.df[rowSums(ukb.icd10.date.df == "") < 260,]
+
+
+##########separate icd10
+ukb.icd10.df  <- ukb_data_df |>
+  dplyr::select(`Participant ID`, `Diagnoses - ICD10`) |>
+  tidyr::separate_rows(`Diagnoses - ICD10`, sep="\\|") |> 
+  filter(`Diagnoses - ICD10` != "NA") 
+  
+ukb.icd10.df <- ukb.icd10.df |> group_by(`Participant ID`) |> mutate(array = row_number() -1 ) |> ungroup()
+
+######### process date
+ukb.icd10.date.df <- ukb.icd10.date.df[,-2] |>  pivot_longer(cols = starts_with("participant.p"), names_to = "array", values_to = "date") |> filter(date != "") 
+#ukb.icd10.date.df$array <- gsub("participant.p41262_a","",ukb.icd10.date.df$array)
+ukb.icd10.date.df$array <- gsub("participant.p41280_a","",ukb.icd10.date.df$array)
+ukb.icd10.date.df$array <- as.integer(ukb.icd10.date.df$array)
+
+setdiff(paste(ukb.icd10.date.df$participant.eid, ukb.icd10.date.df$array),paste(ukb.icd10.df$`Participant ID`,ukb.icd10.df$array))
+
+
+####### merge date
+ukb.icd10.df <- ukb.icd10.df |> inner_join(ukb.icd10.date.df, by = c("Participant ID" = "participant.eid", "array" = "array"))
+
+####### separate ICD10 & Diagnoses
+ukb.icd10.df <- ukb.icd10.df |> separate(`Diagnoses - ICD10`, into = c("ICD10","Diagnosis"), sep = " ", extra = "merge", fill = "right")
+colnames(ukb.icd10.df) <- c("eid","ICD10","Diagnosis","array","date")
+
+####### add assessment date
+ukb.icd10.df <- ukb.icd10.df |> inner_join(ukb_data_df[,c("Participant ID","Date of attending assessment centre | Instance 0")], by = c("eid" = "Participant ID"))
+ukb.icd10.df$date <- as.Date(ukb.icd10.df$date)
+colnames(ukb.icd10.df) <- c("eid","ICD10","Diagnosis","array","date","assess_date")
+ukb.icd10.df$interval_days <- ukb.icd10.df$date - ukb.icd10.df$assess_date
+```
+
+#### thromb-related
+```{r}
+  #"Hypercoagulability",            "Thrombophilia/hypercoagulable states",   "^D68\\.(5|6)",
+  #"Hypercoagulability",            "Essential thrombocythaemia/MPN",         "^(D47\\.3|D75\\.2)$",
+thromb_groups <- tibble::tribble(
+  ~group,                          ~subgroup,                                ~regex,
+  "VTE",                           "Pulmonary embolism",                     "^I26",
+  "VTE",                           "DVT/phlebitis",                          "^I80",
+  "VTE",                           "Other venous thrombosis",                "^(I81|I82)",
+  "VTE (pregnancy)",               "Pregnancy/puerperium VTE",               "^O(22\\.3|22\\.5|87\\.1|87\\.3|88\\.2)$",
+  "ATE",  "Myocardial infarction/acute coronary thrombosis", "^I2(1|2)|^I24\\.0",
+  "ATE",  "Cerebral infarction",                    "^I63",
+  "ATE",  "Arterial embolism/thrombosis",           "^I74",
+  "ATE",  "Visceral/mesenteric infarction",         "^(K55\\.0|K76\\.3|N28\\.0|D73\\.5)$",
+  "VTE",    "Cerebral venous thrombosis",         "^(I67\\.6|G08)$",
+
+  "Other embolism (consider exclude/sensitivity)",
+                                  "Fat/air/amniotic embolism",               "^(T79\\.(0|1)|O88\\.(0|1))$"
+)
+
+classify_thromb <- function(icd_vec) {
+  icd_vec <- toupper(trimws(icd_vec))
+  grp  <- rep(NA_character_, length(icd_vec))
+  subg <- rep(NA_character_, length(icd_vec))
+  for (i in seq_len(nrow(thromb_groups))) {
+    hit <- str_detect(icd_vec, thromb_groups$regex[i])
+    grp[ hit]  <- thromb_groups$group[i]
+    subg[hit]  <- thromb_groups$subgroup[i]
+  }
+  tibble::tibble(thromb_group = grp, thromb_subgroup = subg)
+}
+
+
+ukb.tromb.stats <- ukb.icd10.df |> filter(grepl("thromb|embol|infarc",Diagnosis, ignore.case = TRUE)) |> count(ICD10,Diagnosis) |> arrange(desc(n))
+ukb.tromb.stats <- cbind(ukb.tromb.stats,classify_thromb(ukb.tromb.stats$ICD10))
+#write.table(ukb.tromb.stats, "~/ukb.tromb.stats.txt",sep = "\t",row.names = FALSE)
+
+ukb.icd10.thromb.df <- ukb.icd10.df |> filter(grepl("thromb|embol|infarc",Diagnosis, ignore.case = TRUE))
+ukb.icd10.thromb.df <- cbind(ukb.icd10.thromb.df,classify_thromb(ukb.icd10.thromb.df$ICD10))
+ukb.icd10.thromb.df <- ukb.icd10.thromb.df |> filter(!is.na(thromb_group))
+```
+
+```{r}
+ukb.icd10.thromb.df |> group_by(ICD10, Diagnosis) |> count() |> arrange(desc(n))
+ukb.icd10.thromb.df |> count(thromb_group) |> arrange(desc(n))
+ukb.icd10.thromb.df |> count(thromb_subgroup) |> arrange(desc(n))
+#ukb.icd10.thromb.df <- ukb.icd10.thromb.df |> filter(thromb_group %in% c("ATE","VTE","Hypercoagulability"))
+ukb.icd10.thromb.df <- ukb.icd10.thromb.df |> filter(thromb_group %in% c("ATE","VTE"))
+```
+
+
+#### add Category
+```{r}
+ukb.icd10.df <- ukb.icd10.df |>
+  mutate(
+    Category = case_when(
+      grepl("^[AB]", ICD10) ~ "Infectious diseases",
+      grepl("^C|^D0|^D1|^D2|^D3|^D4", ICD10) ~ "Neoplasms (Tumors)",
+      grepl("^D5|^D6|^D7|^D8", ICD10) ~ "Hematologic/Immune",
+      grepl("^E", ICD10) ~ "Endocrine, nutrition, metabolism",
+      grepl("^F", ICD10) ~ "Mental/Behavioral",
+      grepl("^G", ICD10) ~ "Nervous system",
+      grepl("^H0|^H1|^H2|^H3|^H4|^H5", ICD10) ~ "Eye diseases",
+      grepl("^H6|^H7|^H8|^H9", ICD10) ~ "Ear diseases",
+      grepl("^I", ICD10) ~ "Circulatory system",
+      grepl("^J", ICD10) ~ "Respiratory system",
+      grepl("^K", ICD10) ~ "Digestive system",
+      grepl("^L", ICD10) ~ "Skin/subcutaneous",
+      grepl("^M", ICD10) ~ "Musculoskeletal/connective",
+      grepl("^N", ICD10) ~ "Genitourinary system",
+      grepl("^O", ICD10) ~ "Pregnancy/childbirth",
+      grepl("^P", ICD10) ~ "Perinatal conditions",
+      grepl("^Q", ICD10) ~ "Congenital anomalies",
+      grepl("^R", ICD10) ~ "Symptoms/clinical findings",
+      grepl("^S|^T", ICD10) ~ "Injury/poisoning",
+      grepl("^V|^W|^X|^Y", ICD10) ~ "External causes",
+      grepl("^Z", ICD10) ~ "Health services/contacts",
+      grepl("^U", ICD10) ~ "Special codes (e.g., COVID-19)",
+      TRUE ~ "Unclassified"
+    )
+  )
+```
+
+
+```{r}
+ukb.icd10.df |> count(Category)
+
+ukb.icd10.df |> filter(grepl("S01",ICD10))
+```
+
+### Cancer Register
+```{r}
+ukb.cancer_register.df <- read.csv("Disease_record/ukb.cancer_register.csv", na.strings = c("", "NA"))
+problems(ukb.cancer_register.df)
+ukb.cancer_register.df <- ukb.cancer_register.df[rowSums(is.na(ukb.cancer_register.df)) < 170,]
+```
+
+
+```{r}
+ukb.cancer_register.df <- ukb.cancer_register.df |> 
+  xvhelper::decode_single(coded_col_df) |>
+  xvhelper::decode_column_names(coded_col_df, r_clean_names = FALSE)
+
+ukb.cancer_register.long.df <- ukb.cancer_register.df |> pivot_longer(cols = -`Participant ID`, names_to = "Field", values_to = "Value", values_transform = list(Value = as.character)) |> filter(!is.na(Value)) |> separate(Field, into = c("Field","Instance"), sep = "\\|", extra = "merge", fill = "right")
+
+ukb.cancer_register.long.df <- ukb.cancer_register.long.df |> pivot_wider(id_cols = c(`Participant ID`, Instance), names_from = Field, values_from = Value)
+```
+
+
+### Death Register
+```{r}
+ukb.death_register.df <- read.csv("Disease_record/ukb.death_register.csv", na.strings = c("", "NA"))
+ukb.death_register.df <- ukb.death_register.df[rowSums(is.na(ukb.death_register.df)) < 41,]
+```
+
+```{r}
+ukb.death_register.df <- ukb.death_register.df |> 
+  xvhelper::decode_single(coded_col_df) |>
+  xvhelper::decode_column_names(coded_col_df, r_clean_names = FALSE)
+
+ukb.death_register.long.df <- ukb.death_register.df |> pivot_longer(cols = -`Participant ID`, names_to = "Field", values_to = "Value", values_transform = list(Value = as.character)) |> filter(!is.na(Value)) |> separate(Field, into = c("Field","Instance"), sep = "\\|", extra = "merge", fill = "right")
+
+max((ukb.death_register.long.df |> filter(Field == "Date of death "))$Value)
+```
+
+#### Combind
+```{r}
+ukb.icd10.df |> filter(grepl("C92",ICD10))
+ukb.icd10.df |> filter(eid == "1100317")
+ukb.cancer_register.long.df |> filter(`Participant ID` == "1100317")
+ukb_data_df.s |> filter(eid == "1100317")
+```
+
+```{r}
+#Age_Death Date_Death
+death_df <- ukb.death_register.df[,c("Participant ID","Date of death | Instance 0","Age at death | Instance 0")]
+colnames(death_df) <- c("eid","Date_Death", "Age_Death")
+death_df$Date_Death <- as.Date(death_df$Date_Death)
+
+ukb_data_df.s$status <- as.numeric(ukb_data_df.s$eid %in% death_df$eid)
+ukb_data_df.s <- ukb_data_df.s |> left_join(death_df, by = c("eid"))
+```
+
+## 03. UKB CHIP maf 
+
+```{r}
+ukb.maf.1.df <- read.table("/lustre/home/acct-medty/medty-c/project/14.CHIP_UKB/05.ukb_call_mut/process_maf.26319/merge/UKB.CH_mut.all.maf.txt", quote = "", sep = "\t", header = TRUE)
+ukb.maf.1.df <- ukb.maf.1.df |> filter(WhiteList >1)
+ukb.maf.1.df <- ukb.maf.1.df |> filter(Tumor_Sample_Barcode %in% ukb_data_df.s$eid)
+ukb.maf.2.df <- read.table("/lustre/home/acct-medty/medty-c/project/14.CHIP_UKB/05.ukb_call_mut/process_maf.26319/merge/Blood2023_Vlasschaert_UKB450679.chip.hg38_multianno.maf", quote = "", sep = "\t", header = TRUE)
+ukb.maf.2.df <- ukb.maf.2.df |> mutate(VAF = as.numeric(str_extract(INFO, "(?<=VAF=)[0-9.]+")))
+
+
+all(ukb.maf.2.df$Tumor_Sample_Barcode %in% ukb_data_df.s$eid)
+
+ukb.maf.1.s.df <- ukb.maf.1.df[,c(1,5:13,15,17:21)];ukb.maf.1.s.df$VAF = ukb.maf.1.df$Mean_VAF; 
+#### calc depth
+mean_comma_num_int <- function(x) {
+  if (is.na(x) || x == "") return(NA_integer_)
+  xx <- as.numeric(strsplit(x, ",")[[1]])
+  as.integer(round(mean(xx, na.rm = TRUE)))
+}
+ukb.maf.1.s.df$Depth = sapply(ukb.maf.1.df$DEPTH, mean_comma_num_int) 
+
+ukb.maf.2.s.df <- ukb.maf.2.df[,c(1,5:13,15,17:21)];ukb.maf.2.s.df$VAF =  ukb.maf.2.df$VAF;
+
+dim(ukb.maf.1.s.df)
+dim(ukb.maf.2.s.df)
+
+ukb.maf.df <- ukb.maf.1.s.df |> full_join(ukb.maf.2.s.df, by=colnames(ukb.maf.2.s.df)[1:16])
+ukb.maf.df <- ukb.maf.df |> mutate(VAF = if_else(is.na(VAF.x),VAF.y,VAF.x))
+
+
+# UKB 和 in-house 之间关于indel的突变，位置标注差一个bp，导致同义突变重复注释
+ukb_repeat.maf <- ukb.maf.df |> filter(is.na(VAF.x) | is.na(VAF.y)) |> count(Hugo_Symbol,AAChange,Tumor_Sample_Barcode,Variant_Classification) |> filter(n >=2, Variant_Classification != "Splice_Site")
+dim(ukb_repeat.maf)
+
+
+
+# 1. 定义需要去重处理的那部分
+
+get_first_non_na <- function(x){x <- x[!is.na(x)];if (length(x) == 0) return(NA_real_);x[1]}
+
+maf.na <- ukb.maf.df |>
+  filter(is.na(VAF.x) | is.na(VAF.y)) |>
+  filter(Variant_Classification != "Splice_Site") |>
+#  distinct(Hugo_Symbol, AAChange, Tumor_Sample_Barcode, Variant_Classification, .keep_all = TRUE) 
+  group_by(Hugo_Symbol, AAChange, Tumor_Sample_Barcode, Variant_Classification) |>
+  summarise(across(.cols = -c(VAF.x, VAF.y),.fns = dplyr::first),
+            VAF.x = get_first_non_na(VAF.x),VAF.y = get_first_non_na(VAF.y),.groups = "drop")
+
+
+# 2. 定义其余不需要动的部分
+maf.other <- ukb.maf.df |>
+  filter(!(is.na(VAF.x) | is.na(VAF.y)) | Variant_Classification == "Splice_Site")
+
+
+# 3. 合并回来
+ukb.maf.df <- bind_rows(maf.other, maf.na)
+
+length(unique(ukb.maf.df$Tumor_Sample_Barcode)) /  469481
+dim(ukb.maf.df)
+length(unique(ukb.maf.df$Tumor_Sample_Barcode))
+```
+#### output for suppl tables
+```{r}
+ukb.maf.sort.df <- ukb.maf.df %>%
+  mutate(
+    chr_order = str_remove(Chromosome, "^chr"),
+    chr_order = case_when(
+      chr_order == "X" ~ "23",
+      chr_order == "Y" ~ "24",
+      chr_order %in% c("M", "MT") ~ "25",
+      TRUE ~ chr_order
+    ),
+    chr_order = as.integer(chr_order)
+  ) %>%
+  arrange(chr_order, Start_Position) %>%
+  select(-chr_order)
+
+ukb.maf.sort.df <- ukb.maf.sort.df |> mutate(CHIP = case_when(
+    !is.na(VAF.x) & !is.na(VAF.y) ~ "Shared",
+    !is.na(VAF.x) & is.na(VAF.y) ~ "In-house only",
+    is.na(VAF.x) & !is.na(VAF.y) ~ "UKB only",
+    TRUE ~ NA_character_
+  ))
+
+ukb.maf.sort.df |> count(CHIP)
+
+colnames(ukb.maf.1.df)[c(1,5:13,15,17:21)]
+colnames(ukb.maf.sort.df)
+colnames(ukb.maf.1.df)
+
+ukb.maf.sort.df <- ukb.maf.sort.df |> full_join(ukb.maf.1.df, by=colnames(ukb.maf.1.df)[c(1,5:13,15,17:21)])
+write.table(ukb.maf.sort.df,"chip_suppl_table_chip.tsv",quote = FALSE, sep = "\t",row.names = FALSE)
+```
+
+### self-defined vs ukb
+```{r}
+length(unique(ukb.maf.1.s.df$Tumor_Sample_Barcode))
+length(unique(ukb.maf.2.s.df$Tumor_Sample_Barcode))
+length(unique(c(ukb.maf.1.s.df$Tumor_Sample_Barcode,ukb.maf.2.s.df$Tumor_Sample_Barcode)))
+sum(unique(ukb.maf.1.s.df$Tumor_Sample_Barcode) %in% unique(ukb.maf.2.s.df$Tumor_Sample_Barcode))
+```
+```{r}
+chip.defined.list <- list()
+chip.defined.list[["union"]] <- unique(unique(c(ukb.maf.1.s.df$Tumor_Sample_Barcode,ukb.maf.2.s.df$Tumor_Sample_Barcode)))
+chip.defined.list[["self"]] <- unique(ukb.maf.1.s.df$Tumor_Sample_Barcode)
+chip.defined.list[["ukb"]] <- unique(ukb.maf.2.s.df$Tumor_Sample_Barcode)
+chip.defined.list[["overlap"]] <- unique(ukb.maf.1.s.df$Tumor_Sample_Barcode)[unique(ukb.maf.1.s.df$Tumor_Sample_Barcode) %in% unique(ukb.maf.2.s.df$Tumor_Sample_Barcode)]
+chip.defined.list[["self.only"]] <-unique(ukb.maf.1.s.df$Tumor_Sample_Barcode)[!unique(ukb.maf.1.s.df$Tumor_Sample_Barcode) %in% unique(ukb.maf.2.s.df$Tumor_Sample_Barcode)]
+chip.defined.list[["ukb.only"]] <- unique(ukb.maf.2.s.df$Tumor_Sample_Barcode)[!unique(ukb.maf.2.s.df$Tumor_Sample_Barcode) %in% unique(ukb.maf.1.s.df$Tumor_Sample_Barcode)]
+
+sapply(chip.defined.list,length)
+```
+```{r}
+#ukb_wes_all_eid <- readLines("/lustre/home/acct-medty/medty-c/project/14.CHIP_UKB/05.ukb_call_mut/assets/ukb_wes_eid.list")
+ukb_wes_all_eid <- eid.ls$WES
+chip_defined.mat <- sapply(chip.defined.list, function(eid_set){
+  as.integer(ukb_wes_all_eid %in% eid_set)
+})
+rownames(chip_defined.mat) <- ukb_wes_all_eid
+```
+
+#### diff vaf
+```{r}
+vaf_plot.1 <- data.frame(VAF = (ukb.maf.df |> filter(!is.na(VAF.x)))$VAF,Label = "In-house CHIP")
+vaf_plot.2 <- data.frame(VAF = ukb.maf.2.s.df$VAF,Label = "UKB-released CHIP")
+#vaf_plot.2 <- data.frame(VAF = (ukb.maf.df |> filter(!is.na(VAF.y)))$VAF,Label = "UKB-released")
+vaf_plot.3 <- data.frame(VAF = (ukb.maf.df |> filter(!is.na(VAF.x), is.na(VAF.y)))$VAF, Label = "In-house only CHIP")
+vaf_plot.4 <- data.frame(VAF = (ukb.maf.df |> filter(!is.na(VAF.x), !is.na(VAF.y)))$VAF.x, Label = "Shared variants: in-house VAF")
+vaf_plot.5 <- data.frame(VAF = (ukb.maf.df |> filter(!is.na(VAF.x), !is.na(VAF.y)))$VAF.y, Label = "Shared variants: UKB-released VAF")
+vaf_plot <- rbind(vaf_plot.1,vaf_plot.2)
+vaf_plot <- rbind(vaf_plot,vaf_plot.3)
+vaf_plot <- rbind(vaf_plot,vaf_plot.4)
+vaf_plot <- rbind(vaf_plot,vaf_plot.5)
+
+
+
+median_df <- vaf_plot |>
+  group_by(Label) |>
+  summarise(
+    median_vaf = median(VAF, na.rm = TRUE),
+    y_pos = quantile(VAF, 0.98, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+p_f1_a1 <- vaf_plot |>
+  ggplot(aes(x = Label, y = VAF, fill = Label)) +
+  geom_violin(trim = FALSE) +
+  geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA) +
+  geom_text(
+    data = median_df,
+    aes(
+      x = Label,
+      y = y_pos,
+      label = paste0(round(median_vaf * 100, 1), "%")
+    ),
+    inherit.aes = FALSE,
+    size = 3,
+    vjust = -0.3
+  ) +
+  theme_test() + theme(axis.text.x = element_text(angle = 270,hjust = 1, vjust = 0.5)) + ylim(0,0.5) + 
+  scale_fill_manual(values = c("In-house CHIP" = "#0098c9","In-house only CHIP" = "#B5AA0F","Shared variants: in-house VAF" = "#3C5488", "Shared variants: UKB-released VAF" = "#3C5488","UKB-released CHIP" = "#128640"))
+
+p_f1_a1
+
+
+pdf("chip_f1_a1.pdf",width = 7, height = 6)
+p_f1_a1
+dev.off()
+```
+```{r}
+shared_df <- ukb.maf.df |> filter(!is.na(VAF.x), !is.na(VAF.y)) 
+median_diff <- median(shared_df$VAF.y - shared_df$VAF.x, na.rm = TRUE)
+rho <- cor(shared_df$VAF.x, shared_df$VAF.y, method = "pearson", use = "complete.obs")
+
+shared_df <- shared_df |> filter(!abs(VAF.y - VAF.x) > 0.15)
+
+p_f1_a2 <- ggplot(shared_df, aes(x = VAF.x, y = VAF.y)) +
+  geom_point_rast(alpha = 0.2, size = 0.6, shape = 16) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", linewidth = 0.5) +
+  geom_smooth( method = "lm",se = TRUE,linewidth = 0.5) +
+  annotate("text",x = 0.05,y = 0.45,hjust = 0,
+           label = paste0("Pearson's r = ", round(rho, 3),"\nMedian ΔVAF = ", round(median_diff * 100,2), "%")) +
+  theme_test() + labs( x = "In-house VAF",y = "UKB-released VAF") +
+  ylim(0,0.5) + xlim(0,0.5) 
+
+p_f1_a2
+
+pdf("chip_f1_a2.pdf",width = 5, height = 5)
+p_f1_a2
+dev.off()
+```
+
+#### Depth
+```{r}
+ukb.maf.1.s.df |> ggplot(aes(Depth)) + geom_density(fill = "#00A087") + theme_test()
+#ukb.maf.1.s.df |> mutate(Label = "DEPTH") |> filter(Depth > 20) |> ggplot(aes(Label,Depth)) + geom_violin(fill = "#00A087") + geom_boxplot(width = 0.15)  + scale_y_log10() 
+
+library(dplyr)
+library(ggplot2)
+
+# 计算 density 和峰值位置
+depth_vec <- ukb.maf.df$Depth
+depth_vec <- depth_vec[!is.na(depth_vec)]
+
+den <- density(depth_vec)
+peak_df <- data.frame(Depth = den$x[which.max(den$y)], Density = den$y[which.max(den$y)])
+peak_df
+
+p_f1_a4 <- ukb.maf.df |> filter(!is.na(Depth)) |>
+  ggplot(aes(x = Depth)) +
+  geom_density(fill = "#00A087", alpha = 0.6) +
+  geom_vline(data = peak_df,  aes(xintercept = Depth), linetype = "dashed") +
+  geom_point(data = peak_df,aes(x = Depth, y = Density), shape = 16, size = 3, color = "#A81E2C") +
+  annotate("text", x = peak_df$Depth, y = peak_df$Density,
+    label = paste0("Peak depth = ", round(peak_df$Depth, 2), "X"),
+    vjust = 1, hjust = -0.1, size = 4) +
+  theme_test() + labs(x = "Depth",y = "Density")
+
+p_f1_a4
+
+
+pdf("chip_f1_a4.pdf",width = 4, height = 4)
+p_f1_a4
+dev.off()
+```
+
+#### gene specific vaf
+
+```{r}
+ukb.maf.df |> group_by(Hugo_Symbol,AAChange) |> filter(Hugo_Symbol == "NRAS") |> count()
+```
+
+```{r}
+driver_event_df <- ukb.maf.df |>
+  mutate(
+    Driver_event = case_when(
+      Hugo_Symbol == "DNMT3A" &
+        grepl("^p\\.R882", AAChange) ~
+        "DNMT3A R882H/C/S",
+
+      Hugo_Symbol == "TET2" &
+        Variant_Classification %in% c(
+          "Nonsense_Mutation", "Frame_Shift_Del", "Frame_Shift_Ins", "Splice_Site"
+        ) ~
+        "TET2 truncating/splice",
+      
+      Hugo_Symbol == "ASXL1" &
+        Variant_Classification %in% c(
+          "Nonsense_Mutation", "Frame_Shift_Del", "Frame_Shift_Ins", "Splice_Site"
+        ) ~
+        "ASXL1 truncating/splice",
+
+      Hugo_Symbol == "PPM1D" &
+        Variant_Classification %in% c(
+          "Nonsense_Mutation", "Frame_Shift_Del", "Frame_Shift_Ins","Splice_Site"
+        ) ~
+        "PPM1D truncating/splice",
+
+      Hugo_Symbol == "TP53" &
+        (
+          Variant_Classification %in% c(
+            "Nonsense_Mutation", "Frame_Shift_Del", "Frame_Shift_Ins", "Splice_Site"
+          ) |
+            grepl("^p\\.(R136|R234)", AAChange)
+        ) ~
+        "TP53 R136/R234/truncating",
+
+      Hugo_Symbol == "JAK2" &
+        AAChange == "p.V617F" ~
+        "JAK2 V617F",
+
+      Hugo_Symbol == "SRSF2" &
+        grepl("^p\\.P95", AAChange) ~
+        "SRSF2 P95H/L/R",
+
+      Hugo_Symbol == "SF3B1" &
+        AAChange == "p.K700E" ~
+        "SF3B1 K700E",
+
+      Hugo_Symbol %in% c("IDH1", "IDH2") &
+        (
+          (Hugo_Symbol == "IDH1") |
+          (Hugo_Symbol == "IDH2")
+        ) ~
+        "IDH1/2 R132/R140 etc.",
+
+      Hugo_Symbol %in% c("KRAS", "NRAS")  ~
+        "KRAS/NRAS G12/G13 etc.",
+
+      TRUE ~ NA_character_
+    ),
+    Label = case_when(
+      !is.na(VAF.x) & !is.na(VAF.y) ~ "Shared",
+      !is.na(VAF.x) &  is.na(VAF.y) ~ "In-house only",
+       is.na(VAF.x) & !is.na(VAF.y) ~ "UKB-released only",
+      TRUE ~ NA_character_
+    ),
+    Label = factor(
+      Label,
+      levels = c("In-house only", "Shared", "UKB-released only")
+    )
+  ) |>
+  filter(!is.na(Driver_event), !is.na(Label))
+
+driver_event_count <- driver_event_df |>
+  distinct(Tumor_Sample_Barcode, Hugo_Symbol, AAChange, Driver_event, Label, .keep_all = TRUE) |>
+  count(Driver_event, Label, name = "n") |>
+  group_by(Driver_event) |>
+  mutate(total_n = sum(n)) |>
+  ungroup() |>
+  mutate(
+    Driver_event = fct_reorder(Driver_event, total_n)
+  )
+
+p_driver_event <- driver_event_count |>
+  ggplot(aes(x = Driver_event, y = n, fill = Label)) +
+  geom_col(width = 0.75) +
+  coord_flip() +
+  theme_test() +
+  labs(
+    x = NULL,
+    y = "Number of driver-defining events",
+    fill = NULL
+  ) + 
+  scale_fill_manual(values = c("In-house only" = "#B5AA0F","Shared" = "#3C5488", "UKB-released only" = "#128640"))
+
+p_driver_event
+
+total_label_df <- driver_event_count |>
+  group_by(Driver_event) |>
+  summarise(total_n = sum(n), .groups = "drop")
+
+p_f1_a3 <- p_driver_event +
+  geom_text(
+    data = total_label_df,
+    aes(x = Driver_event, y = total_n, label = total_n),
+    inherit.aes = FALSE,
+    hjust = -0.2,
+    size = 3
+  ) +
+  expand_limits(y = max(total_label_df$total_n) * 1.12)
+p_f1_a3
+pdf("chip_f1_a3.pdf",width = 7, height = 4)
+p_f1_a3
+dev.off()
+```
+
+
+
+### maftools
+```{r}
+library(maftools)
+#ukb.maf.df <- read.table("/lustre/home/acct-medty/medty-c/project/14.CHIP_UKB/05.ukb_call_mut/process_maf/UKB.CH_mut.all.sort.maf.txt.gz", quote = "", sep = "\t", header = TRUE)
+ukb.maf <- read.maf(ukb.maf.df)
+getSampleSummary(ukb.maf)
+getGeneSummary(ukb.maf)
+```
+
+```{r}
+col <- brewer.pal(n=10, name="Paired")
+#col <- c("#3C5488","#A81E2C","#B5AA0F","#7BA39D","#B15928","#6A3D9A","#1F78B4","#8491B4","#7E6148","#E64B35","#4DBBD5","#00A087","#A20056","#008B45","#808180","#1B1919")
+names(col) = c('Frame_Shift_Del','Missense_Mutation', 'Nonsense_Mutation', 'Multi_Hit', 'Frame_Shift_Ins', 'In_Frame_Ins', 'Splice_Site', 'In_Frame_Del', "Amp", "Del")
+plotmafSummary(maf = ukb.maf, rmOutlier = TRUE, addStat = 'median', dashboard = TRUE, titvRaw = FALSE, color = col)
+
+pdf("chip_sf1.pdf", width = 9, height = 5)
+plotmafSummary(maf = ukb.maf, rmOutlier = TRUE, addStat = 'median', dashboard = TRUE, titvRaw = FALSE, color = col)
+dev.off()
+```
+
+```{r}
+oncoplot(ukb.maf, top = 20, bgCol = "grey90", borderCol = NULL, color=col,showTumorSampleBarcodes =FALSE, removeNonMutated = FALSE, drawRowBar = TRUE , drawColBar = FALSE, SampleNamefontSize = 0.8, legendFontSize = 1, fontSize = 0.8, titleFontSize = 1.2, cohortSize = 469481)
+
+#pdf("chip_f1b.pdf",width = 12,height = 6,useDingbats = FALSE)
+oncoplot(ukb.maf, top = 20, bgCol = "grey90", borderCol = NULL, color=col,showTumorSampleBarcodes =FALSE, removeNonMutated = FALSE, drawRowBar = TRUE , drawColBar = FALSE, SampleNamefontSize = 0.8, legendFontSize = 1,draw_titv = FALSE, fontSize = 0.8, titleFontSize = 1.2, titleText = "CHIP carriers: 31,210 (6.65%); mutations: 34,527")
+#dev.off()
+```
+### vaf
+```{r}
+chip_genes <- c("DNMT3A","TET2","ASXL1","PPM1D","TP53","SRSF2","JAK2","SF3B1")
+ukb.maf.df |> filter(Hugo_Symbol %in% chip_genes) |> group_by(Hugo_Symbol) |> summarise(median(VAF))
+ukb.maf.df |> filter(Hugo_Symbol %in% chip_genes) |> 
+  mutate(Hugo_Symbol = factor(Hugo_Symbol, levels =  rev(chip_genes))) |> 
+  ggplot(aes(y = VAF, x = Hugo_Symbol)) + geom_violin(aes(fill = Hugo_Symbol), show.legend = FALSE) + 
+  geom_jitter_rast(width = 0.08, alpha = 0.1) + geom_boxplot(width=0.1,outlier.shape = NA) + 
+  theme_test() + ylab("VAF") + xlab("")  + scale_fill_manual(values = rev(mycol[1:8])) + 
+  geom_hline(yintercept = c(0.1,0.2),linetype = 2,color = c("#3C5488","#C81E76")) + coord_flip()  + ylim(0,0.5)
+
+pdf("chip_f1c.pdf",width = 4,height = 4,useDingbats = FALSE)
+ukb.maf.df |> filter(Hugo_Symbol %in% chip_genes) |> 
+  mutate(Hugo_Symbol = factor(Hugo_Symbol, levels =  rev(chip_genes))) |> 
+  ggplot(aes(y = VAF, x = Hugo_Symbol)) + geom_violin(aes(fill = Hugo_Symbol), show.legend = FALSE) + 
+  geom_jitter_rast(width = 0.08, alpha = 0.1) + geom_boxplot(width=0.1,outlier.shape = NA) + 
+  theme_test() + ylab("VAF") + xlab("")  + scale_fill_manual(values = rev(mycol[1:8])) + 
+  geom_hline(yintercept = c(0.1,0.2),linetype = 2,color = c("#3C5488","#C81E76")) + coord_flip() + ylim(0,0.5)
+dev.off()
+```
+
+```{r}
+ukb.maf.df |> filter(Hugo_Symbol == "JAK2")  |> count(AAChange)
+
+ukb.maf.df |> filter(Hugo_Symbol %in% chip_genes)|> count(Hugo_Symbol) |>
+  mutate(Hugo_Symbol = factor(Hugo_Symbol, levels =  rev(chip_genes))) 
+```
+
+### white list
+```{r}
+wl.maf.df <- read.table("../05.ukb_call_mut/process_maf.26319/WhiteList.CH_mut.merge.maf.txt", quote = "", sep = "\t", header = TRUE)
+wl.maf.df <- wl.maf.df |> filter(Hugo_Symbol %in% unique(ukb.maf.df$Hugo_Symbol)) 
+```
+
+```{r}
+wl.list <- c("Blood2023_Vlasschaert_UKB450679","Nature2020_Bick_TOPMED97691","NG2020_Bolton_MSK24145","NG2022_Kar_UKB200453","NC2023_Brown_UKB198178","NG2024_Bernstein_UKB200618")
+#pdf("chip_sf2.pdf",width = 6,height = 6)
+lapply(wl.list,function(x){
+  center <- x
+  #center <- "NG2024_Bernstein_UKB200618"
+  tmp.maf.df <- wl.maf.df |> filter(Center  == center)
+  n_mut <- format(dim(tmp.maf.df)[1], big.mark = ",", scientific = FALSE)
+  tmp.maf <- read.maf(tmp.maf.df)
+  oncoplot(tmp.maf, top = 20, bgCol = "grey90", borderCol = NULL, color=col,showTumorSampleBarcodes =FALSE, removeNonMutated = FALSE, drawRowBar = TRUE , drawColBar = FALSE, SampleNamefontSize = 0.8, legendFontSize = 1, fontSize = 0.8, titleFontSize = 1.2, titleText =paste0("CHIP mutation landscape in ", center, " (", n_mut, " mutations)"))
+})
+#dev.off()
+```
+
+```{r}
+unique(ukb.maf.df$Hugo_Symbol)
+
+maf_gene.num.df.1 <- wl.maf.df |> filter(Hugo_Symbol %in% unique(ukb.maf.df$Hugo_Symbol)) |> mutate(Genes = if_else(Hugo_Symbol %in% chip_genes, Hugo_Symbol, "Other")) |> group_by(Genes,Center) |> count()
+maf_gene.num.df.2 <- ukb.maf.df |> mutate(Genes = if_else(Hugo_Symbol %in% chip_genes, Hugo_Symbol, "Other"), Center = "In_This_Study") |> group_by(Genes,Center) |> count()
+maf_gene.num.df.3 <- ukb.maf.1.df |> mutate(Genes = if_else(Hugo_Symbol %in% chip_genes, Hugo_Symbol, "Other"), Center = "self") |> group_by(Genes,Center) |> count()
+maf_gene.num.df.4 <- ukb.maf.df |> filter(! is.na(VAF.x) & is.na(VAF.y)) |> mutate(Genes = if_else(Hugo_Symbol %in% chip_genes, Hugo_Symbol, "Other"), Center = "self-only") |> group_by(Genes,Center) |> count()
+
+maf_gene.num.df <- rbind(maf_gene.num.df.1,maf_gene.num.df.2)
+maf_gene.num.df <- rbind(maf_gene.num.df,maf_gene.num.df.3)
+maf_gene.num.df <- rbind(maf_gene.num.df,maf_gene.num.df.4)
+maf_gene.num.df$Genes <- factor(maf_gene.num.df$Genes, levels = c(chip_genes,"Other"))
+
+unique(maf_gene.num.df$Center)
+
+#pdf("chip_f1d.pdf",width = 4,height = 6,useDingbats = FALSE)
+maf_gene.num.df |> filter(Center %in% c("In_This_Study","self","self-only","Blood2023_Vlasschaert_UKB450679","Nature2020_Bick_TOPMED97691","NG2020_Bolton_MSK24145","NG2022_Kar_UKB200453","NC2023_Brown_UKB198178","NG2024_Bernstein_UKB200618")) |> mutate(Center2 = factor(Center, levels = c("In_This_Study","self","self-only","Blood2023_Vlasschaert_UKB450679","Nature2020_Bick_TOPMED97691","NG2020_Bolton_MSK24145","NG2022_Kar_UKB200453","NC2023_Brown_UKB198178","NG2024_Bernstein_UKB200618"))) |> ggplot(aes(Center2,n,fill=Genes)) + geom_col(position = "fill") + 
+  theme_test() + scale_fill_manual(values = mycol)  + ylab("Ratio") +  xlab("") + 
+  theme(axis.text.x = element_text(angle = 90,hjust = 1, vjust = 0.5))
+#dev.off()
+```
+
+### olink chip maf 
+```{r}
+ukb_wes_all_eid <- readLines("/lustre/home/acct-medty/medty-c/project/14.CHIP_UKB/05.ukb_call_mut/assets/ukb_wes_eid.list")
+ukb_wes_chip_eid <- unique(ukb.maf.df$Tumor_Sample_Barcode)
+ukb_wes_all_eid[!(ukb_wes_all_eid %in% ukb_data_df$`Participant ID`)]
+
+
+ukb_olink_chip_eid <- ukb_wes_chip_eid[ukb_wes_chip_eid %in% instance_0_df$eid]
+```
+```{r}
+olink_chip.maf.df <- ukb.maf.df[match(ukb_olink_chip_eid,ukb.maf.df$Tumor_Sample_Barcode),]
+olink_chip.maf <- read.maf(olink_chip.maf.df |> filter(VAF > 0.1))
+oncoplot(olink_chip.maf, top = 20, bgCol = "grey90", borderCol = NULL, color=col,showTumorSampleBarcodes =FALSE, removeNonMutated = FALSE, drawRowBar = TRUE , drawColBar = FALSE, SampleNamefontSize = 0.8, legendFontSize = 1, fontSize = 0.8, titleFontSize = 1.2)
+#cohortSize = sum(instance_0_df$eid %in% ukb_wes_all_eid)
+```
+
+### chip mut dataframe
+```{r}
+chip_mut_df <- data.frame(eid = ukb.maf.df$Tumor_Sample_Barcode, CHIP = paste0(ukb.maf.df$Hugo_Symbol,":",ukb.maf.df$AAChange), VAF = ukb.maf.df$VAF)
+chip_mut_df <- chip_mut_df |> group_by(eid) |> summarise(Mut = paste(CHIP,collapse = ";"),Num = n()) 
+chip_mut_df
+```
+
+### CHIP clasify by Genes
+```{r}
+eid.chip.list <- list()
+eid.chip.list[["CHIP.all"]] <- unique(ukb.maf.df$Tumor_Sample_Barcode)
+eid.chip.list[["CHIP.lar"]] <- unique((ukb.maf.df |> filter(VAF >= 0.1))$Tumor_Sample_Barcode)
+eid.chip.list[["CHIP.sma"]] <- eid.chip.list[["CHIP.all"]][ ! eid.chip.list[["CHIP.all"]]  %in% eid.chip.list[["CHIP.lar"]] ]
+
+eid.chip.list[["JAK2.all"]] <- unique((ukb.maf.df |> filter(Hugo_Symbol == "JAK2"))$Tumor_Sample_Barcode)
+eid.chip.list[["JAK2.lar"]] <- unique((ukb.maf.df |> filter(VAF >= 0.2) |> filter(Hugo_Symbol == "JAK2"))$Tumor_Sample_Barcode)
+eid.chip.list[["JAK2.sma"]] <- eid.chip.list[["JAK2.all"]][ ! eid.chip.list[["JAK2.all"]]  %in% eid.chip.list[["JAK2.lar"]] ]
+
+for (x in c("DNMT3A","TET2","ASXL1","PPM1D","TP53","SRSF2","SF3B1")) {
+  all <- unique((ukb.maf.df |> filter(Hugo_Symbol == x))$Tumor_Sample_Barcode)
+  large <- unique((ukb.maf.df |> filter(VAF >= 0.1) |> filter(Hugo_Symbol == x))$Tumor_Sample_Barcode)
+  small <- all[ ! all %in% large]
+  eid.chip.list[[paste0(x,".all")]] <- all
+  eid.chip.list[[paste0(x,".lar")]] <- large
+  eid.chip.list[[paste0(x,".sma")]] <- small
+}
+
+sapply(eid.chip.list,length)
+```
+```{r}
+ukb_wes_all_eid <- readLines("/lustre/home/acct-medty/medty-c/project/14.CHIP_UKB/05.ukb_call_mut/assets/ukb_wes_eid.list")
+chip_mat <- sapply(eid.chip.list, function(eid_set){
+  as.integer(ukb_wes_all_eid %in% eid_set)
+})
+rownames(chip_mat) <- ukb_wes_all_eid
+```
+
+### CHIP & phenotype
+```{r}
+chip_mat.phen.df <- as.data.frame(chip_mat)
+chip_mat.phen.df$eid <- as.double(rownames(chip_mat.phen.df))
+chip_mat.phen.df <- ukb_data_df.s |> inner_join(chip_mat.phen.df, by = c("eid"))
+chip_mat.phen.df <- chip_mat.phen.df |> left_join(ukb_blood_count_df, by = c("eid"))
+chip_mat.phen.df <- chip_mat.phen.df |> left_join(ukb.biochem.df, by = c("eid"))
+
+#eid.no_icd10 <- chip_mat.phen.df$eid[! chip_mat.phen.df$eid %in% unique(ukb.icd10.df$eid)]
+#chip_mat.phen.df <- chip_mat.phen.df |> filter(!eid %in% eid.no_icd10)
+```
+
+```{r}
+thromb.eid <- unique(ukb.icd10.thromb.df$eid)
+chip_mat.phen.df$thromb <- 0
+chip_mat.phen.df[chip_mat.phen.df$eid %in% thromb.eid,]$thromb <- 1
+
+#hyter.eid <- (ukb.icd10.thromb.df |> filter(thromb_group == "Hypercoagulability"))$eid
+#chip_mat.phen.df$hyter <- 0
+#chip_mat.phen.df[chip_mat.phen.df$eid %in% hyter.eid,]$hyter <- 1
+
+ATE.eid <- (ukb.icd10.thromb.df |> filter(thromb_group == "ATE"))$eid
+chip_mat.phen.df$ATE <- 0
+chip_mat.phen.df[chip_mat.phen.df$eid %in% ATE.eid,]$ATE <- 1
+
+VTE.eid <- (ukb.icd10.thromb.df |> filter(thromb_group == "VTE"))$eid
+chip_mat.phen.df$VTE <- 0
+chip_mat.phen.df[chip_mat.phen.df$eid %in% VTE.eid,]$VTE <- 1
+
+```
+
+
+```{r}
+chip_mat.phen.df |> group_by(CHIP.all, thromb) |> count()
+(3818 / (39787 + 3818)) / (27386 / (398489 + 27386))
+
+chip_mat.phen.df$PLT_10e9_L.s <- scale(chip_mat.phen.df$PLT_10e9_L)
+
+chip_defined.df <- as.data.frame(chip_defined.mat)
+chip_defined.df$eid <- as.double(rownames(chip_defined.df))
+chip_mat.phen.df <- chip_mat.phen.df |> left_join(chip_defined.df, by = c("eid"))
+```
+
+
+```{r}
+#x <- "thrombophlebitis"
+#x <- "embolism"
+#x <- "infarction"
+AbelR::plot_logistic_forest(chip_mat.phen.df, outcome = "CHIP.sma", predictors = c("Sex", "Age", "BMI", "Smoking","thromb", "PLT_10e9_L.s","statin","antidiabetic","antithrombotic"))
+AbelR::plot_logistic_forest(chip_mat.phen.df, outcome = "thromb", predictors = c("Sex", "Age", "BMI", "Smoking", "CHIP.all","PLT_10e9_L.s"))
+
+AbelR::plot_logistic_forest(chip_mat.phen.df, outcome = "CHIP.all", predictors = c("Sex", "Age", "BMI", "Smoking","thromb"))
+AbelR::plot_logistic_forest(chip_mat.phen.df, outcome = "thromb", predictors = c("Sex", "Age", "BMI", "Smoking", "CHIP.all"))
+
+AbelR::plot_logistic_forest(chip_mat.phen.df, outcome = "statin", predictors = c("Sex", "Age", "BMI", "Smoking","CHIP.all","thromb"))
+```
+ 
+
+#### phen: self vs ukb
+```{r}
+pp <- list()
+pp[[1]] <- (AbelR::plot_logistic_forest(chip_mat.phen.df, outcome = "union", predictors = c("Sex", "Age", "BMI", "Smoking")))$plot + ylim(0.95,1.25)
+pp[[2]] <- (AbelR::plot_logistic_forest(chip_mat.phen.df, outcome = "self", predictors = c("Sex", "Age", "BMI", "Smoking")))$plot + ylim(0.95,1.25)
+pp[[3]] <- (AbelR::plot_logistic_forest(chip_mat.phen.df, outcome = "ukb", predictors = c("Sex", "Age", "BMI", "Smoking")))$plot + ylim(0.95,1.25)
+pp[[4]] <- (AbelR::plot_logistic_forest(chip_mat.phen.df, outcome = "self.only", predictors = c("Sex", "Age", "BMI", "Smoking")))$plot + ylim(0.95,1.25)
+
+pdf("chip_f1g.pdf",width =4 , height =12,useDingbats = FALSE)
+ggarrange(plotlist = pp, ncol = 1)
+dev.off()
+```
+
+```{r}
+chip.or <- list() 
+chip.or$`Union CHIP` <-  (AbelR::plot_logistic_forest(chip_mat.phen.df, outcome = "union", predictors = c("Sex", "Age", "BMI", "Smoking")))$or
+chip.or$`In-house CHIP` <-  (AbelR::plot_logistic_forest(chip_mat.phen.df, outcome = "self", predictors = c("Sex", "Age", "BMI", "Smoking")))$or
+chip.or$`UKB-released CHIP` <-  (AbelR::plot_logistic_forest(chip_mat.phen.df, outcome = "ukb", predictors = c("Sex", "Age", "BMI", "Smoking")))$or
+chip.or$`In-house only CHIP` <-  (AbelR::plot_logistic_forest(chip_mat.phen.df, outcome = "self.only", predictors = c("Sex", "Age", "BMI", "Smoking")))$or
+
+chip.or2 <- lapply(names(chip.or),function(x){
+  df <- chip.or[[x]]
+  df$CHIP <- x
+  return(df)
+})
+chip.or.df <- do.call(rbind,chip.or2)
+write.table(chip.or.df,"chip_suppl_table_chipor.tsv",row.names = FALSE, quote = FALSE, sep = "\t")
+```
+
+
+```{r}
+df_age <- list()
+df_age[[1]] <- chip_mat.phen.df |> filter(union == 1) |> select(eid,Age) |> mutate(Type = "union") |> arrange(Age) |> mutate(ECD = row_number() / n())
+df_age[[2]] <- chip_mat.phen.df |> filter(self == 1) |> select(eid,Age) |> mutate(Type = "self") |> arrange(Age) |> mutate(ECD = row_number() / n())
+df_age[[3]] <- chip_mat.phen.df |> filter(self.only == 1) |> select(eid,Age) |> mutate(Type = "self.only") |> arrange(Age) |> mutate(ECD = row_number() / n())
+df_age[[4]] <- chip_mat.phen.df |> filter(ukb == 1) |> select(eid,Age) |> mutate(Type = "ukb") |> arrange(Age) |> mutate(ECD = row_number() / n())
+#df_age[[5]] <- chip_mat.phen.df |> filter(ukb == 1) |> select(eid,Age) |> mutate(Type = "overlap") |> arrange(Age) |> mutate(ECD = row_number() / n())
+#df_age[[6]] <- chip_mat.phen.df |> filter(ukb == 1) |> select(eid,Age) |> mutate(Type = "ukb.only") |> arrange(Age) |> mutate(ECD = row_number() / n())
+df_plot <- do.call(rbind,df_age)
+
+unique(df_plot$Type)
+
+p_ecd <- df_plot  |> ggplot( aes(x = Age, y = ECD, color = Type)) +
+  geom_smooth(method = "loess",se = FALSE,span = 0.4,linewidth = 1) +
+  scale_color_manual(values = alpha(c("union" = "black","self" = "#0098C9","self.only" = "#B5AA0F","overlap" = "#3C5488","ukb" = "#128640", "ukb.only" = "#748098"), 0.5)) +
+  theme_test()
+
+p_ecd
+#pdf("chip_f1f.pdf",width = 8, height =6,useDingbats = FALSE)
+#p_ecd
+#dev.off()
+```
+
+```{r}
+calc_ecd_cor <- function(df, ref_type = "In-house CHIP", by = 0.1) {
+  
+  age_grid <- seq(
+    floor(min(df$Age, na.rm = TRUE)),
+    ceiling(max(df$Age, na.rm = TRUE)),
+    by = by
+  )
+  
+  ecd_wide <- df %>%
+    group_by(Type) %>%
+    arrange(Age, .by_group = TRUE) %>%
+    summarise(
+      data = list(tibble(
+        Age_grid = age_grid,
+        ECD = approx(Age, ECD, xout = age_grid, rule = 2)$y
+      )),
+      .groups = "drop"
+    ) %>%
+    tidyr::unnest(data) %>%
+    tidyr::pivot_wider(names_from = Type, values_from = ECD)
+  
+  other_types <- setdiff(names(ecd_wide), c("Age_grid", ref_type))
+  
+  tibble(
+    Comparison = paste(ref_type, "vs", other_types),
+    Pearson_r = sapply(other_types, function(x) {
+      cor(ecd_wide[[ref_type]], ecd_wide[[x]], use = "complete.obs")
+    })
+  )
+}
+
+df_plot2 <- df_plot %>%
+  mutate(
+    Type = recode(
+      Type,
+      "union" = "Union CHIP",
+      "self" = "In-house CHIP",
+      "self.only" = "In-house-only CHIP",
+      "ukb" = "UKB-released CHIP"
+    )
+  )
+
+cor_df <- calc_ecd_cor(df_plot2, ref_type = "In-house CHIP")
+cor_df
+```
+
+#### phen: CH large vs small
+```{r}
+CHIP <- names(eid.chip.list)
+var.arr <- c("Sex","Age","BMI","Smoking","pc1","pc2","pc3","pc4","pc5","pc6","pc7","pc8","pc9","pc10","statin","antidiabetic","antithrombotic")
+
+tmp.or.list <- lapply(CHIP,function(x){
+  df <- chip_mat.phen.df |> filter(CHIP.all == 0 | .data[[x]] ==1)
+  or <- AbelR::plot_logistic_forest(df, outcome = x, predictors = var.arr)
+  or$or$NUM <- sum(df[,x])
+  or$or$Symbol <- str_split(x, "\\.")[[1]][1]
+  or$or$Type <- str_split(x, "\\.")[[1]][2]
+  return(or$or)
+})
+phen.or.df <- do.call(rbind,tmp.or.list)
+write.table(phen.or.df,"chip_suppl_table_geneor.tsv",row.names = FALSE, sep = "\t", quote = FALSE)
+```
+
+```{r}
+phen.or.df$Type <- factor(phen.or.df$Type, levels = rev(c("all","lar","sma")))
+phen.or.df$Symbol <- factor(phen.or.df$Symbol, levels = c("CHIP","DNMT3A","TET2","ASXL1","PPM1D","TP53","SRSF2","JAK2","SF3B1"))
+phen.or.df$Num <-paste0("N=",phen.or.df$NUM)
+phen.or.df$Num <- factor(phen.or.df$Num, levels = rev(unique(phen.or.df$Num)))
+phen.arr <- unique(phen.or.df$term)[c(1:4,15,16,17)]
+
+plot.list <- lapply(phen.arr,\(x){
+  phen.or.df |> filter(term  == x) |> ggplot(aes(x = Num, y = estimate, ymin = conf.low, ymax = conf.high)) +
+    geom_pointrange(aes(color = Type)) +
+    geom_hline(yintercept = 1, linetype = 2, color = "grey50") +
+    geom_text(aes(label = stars,color = Type), hjust = -1, show.legend = FALSE) + 
+    coord_flip() +
+    facet_grid(Symbol~.,scales = "free_y", switch = "y") +
+    labs(y = "Odds Ratio (95% CI)", x = "", title = x) +
+    theme_test() +  
+    scale_color_manual(values = c("sma" = "#7BA39D", "lar" = "#B5AA0F", "all" = "#3C5488"))
+})
+
+plot.list
+
+pdf("chip_f1e.pdf",width = 21, height =6,useDingbats = FALSE)
+ggarrange(plotlist = plot.list, ncol = 7, common.legend = TRUE, legend = "top")
+dev.off()
+```
+
+#### phen: thromb
+```{r}
+ var.arr <- c("Sex", "Age", "BMI", "Smoking", "pc1", "pc2", "pc3", "pc4", "pc5", "pc6", "pc7", "pc8", "pc9", "pc10", "statin", "antidiabetic", "antithrombotic")
+#CHIP.arr <- names(eid.chip.list)[c(1:3,7:18)]
+CHIP.arr <- names(eid.chip.list)
+Throm.arr <- c("thromb","VTE","ATE") #"hyter",
+#x = Throm.ar[1]
+#y = CHIP.arr[1]
+throm.or.ls <- lapply(Throm.arr,\(x){
+  tmp.or.list <- lapply(CHIP.arr,\(y){
+    df = chip_mat.phen.df |> filter(.data[[x]] == 1 |  thromb== 0) |> filter(CHIP.all == 0 | .data[[y]] ==1)
+    or <- AbelR::plot_logistic_forest(df, outcome = x, predictors = c(y,var.arr))
+    or$or$NUM <- dim(df |> filter(.data[[x]] == 1, .data[[y]] == 1))[1]
+    or$or$Symbol <- str_split(y, "\\.")[[1]][1]
+    or$or$Type <- str_split(y, "\\.")[[1]][2]
+    or$or$Event <- x
+    return(or$or[y,])
+  })
+  tmp.or.df <- do.call(rbind,tmp.or.list)
+})
+throm.or.df <- do.call(rbind,throm.or.ls)
+
+write.table(throm.or.df,"chip_suppl_table_thtomor.tsv",sep = "\t", quote = FALSE, row.names = FALSE)
+```
+```{r}
+events.colors <- c("black",mycol[1:8])
+names(events.colors) <- c("CHIP","DNMT3A","TET2","ASXL1","PPM1D","TP53","SRSF2","JAK2","SF3B1")
+throm.or.df$Type <- factor(throm.or.df$Type, levels = rev(c("all","lar","sma")))
+throm.or.df$Symbol <- factor(throm.or.df$Symbol, levels = rev(c("CHIP","DNMT3A","TET2","ASXL1","PPM1D","JAK2","TP53","SRSF2","SF3B1")))
+throm.or.df$Event <- factor(throm.or.df$Event, levels = Throm.arr)
+throm.or.df$Num <-paste0("N=",throm.or.df$NUM)
+  y_up <- max(throm.or.df$conf.high)
+  y_dw <- min(throm.or.df$conf.low)
+#throm.or.df$Num <- factor(throm.or.df$Num, levels = rev(unique(throm.or.df$Num)))
+
+plot.list2 <- lapply(c("all","lar","sma"),\(x){
+
+  df <- throm.or.df |> filter(Type == x)
+  df$Type <- factor(paste(df$Event,df$Symbol), levels = paste(df$Event,levels(df$Symbol)))
+  lab_vec <- setNames(df$Num, df$Type)
+  df |> ggplot(aes(x = Type, y = estimate, ymin = conf.low, ymax = conf.high)) +
+    geom_pointrange(aes(color = Symbol)) +
+    geom_hline(yintercept = 1, linetype = 2, color = "grey50") +
+    geom_text(data = \(d) d |> dplyr::filter(!is.na(stars), stars != "ns"),
+              aes(label = stars,color = Symbol), hjust = -1, show.legend = FALSE) + 
+    scale_x_discrete(labels = lab_vec) + 
+    scale_y_log10(limits = c(y_dw, y_up), breaks = c(0.5,  1, 3, 5),labels = c("0.5",  "1", "3",  "5")) + 
+    coord_flip() +
+    facet_grid(Event~.,scales = "free_y", switch = "y") +
+    labs(y = "Odds Ratio (95% CI)", x = "", title = x) +
+    theme_test() +  
+    scale_color_manual(values = events.colors)
+})
+
+plot.list2
+
+plot.list3 <- lapply(Throm.arr,\(x){
+  throm.or.df |> filter(Event  == x) |> ggplot(aes(x = Num, y = estimate, ymin = conf.low, ymax = conf.high)) +
+    geom_pointrange(aes(color = Symbol)) +
+    geom_hline(yintercept = 1, linetype = 2, color = "grey50") +
+    geom_text(aes(label = stars,color = Symbol), hjust = -1, show.legend = FALSE) + 
+    coord_flip() +
+    facet_grid(Type~.,scales = "free_y", switch = "y") +
+    labs(y = "Odds Ratio (95% CI)", x = "", title = x) +
+    theme_test() +  
+    scale_color_manual(values = rev(c("black",mycol[1:8])))
+})
+
+plot.list3
+
+ggarrange(plotlist = plot.list2, ncol = 3, common.legend = TRUE, legend = "top")
+```
+```{r}
+pdf("chip_f2d.pdf",width = 8, height =6,useDingbats = FALSE)
+ggarrange(plotlist = plot.list2, ncol = 3, common.legend = TRUE, legend = "top")
+dev.off()
+
+```
+
+####Distribution: thromb
+```{r}
+#ukb.icd10.thromb.df$eid <- as.double(ukb.icd10.thromb.df$eid)
+
+#ukb.icd10.thromb.df |> filter(eid %in% chip_mat.phen.df$eid) |>  group_by(thromb_group,thromb_subgroup) |> count(thromb_group,thromb_subgroup) |> arrange(desc(n)) |>
+#  ggplot(aes(y=thromb_subgroup,x=n)) + geom_col() + theme_test()
+ukb.icd10.thromb.df <- ukb.icd10.thromb.df |>  filter(eid %in% chip_mat.phen.df$eid)
+length(unique(ukb.icd10.thromb.df$eid))
+
+df_group <- ukb.icd10.thromb.df |>
+  count(thromb_group) |>
+  filter(thromb_group %in% c("ATE", "VTE")) |>
+  mutate(thromb_group = fct_reorder(thromb_group, -n))
+
+p_all <- ggplot(df_group, aes(x = thromb_group, y = n, fill = thromb_group)) +
+  geom_col(width = 0.7, show.legend = FALSE) +
+  geom_text(aes(label = scales::comma(n)), vjust = -0.3, size = 5) +
+  labs(x = NULL, y = "Number of ICD10 records") +
+  theme_test() 
+
+df_subgroup <- ukb.icd10.thromb.df |>
+  filter(thromb_group %in% c("ATE", "VTE")) |>
+  count(thromb_group, thromb_subgroup) |>
+  group_by(thromb_group) |>
+  mutate(thromb_subgroup = fct_reorder(thromb_subgroup, n)) |>
+  ungroup()
+df_subgroup$thromb_group <- factor(df_subgroup$thromb_group, levels = c("ATE", "VTE"))
+p_sub <- ggplot(df_subgroup, aes(x = thromb_subgroup, y = n, fill = thromb_group)) +
+  geom_col(show.legend = FALSE) +
+  geom_text(aes(label = scales::comma(n)), hjust = -0.1, size = 4) +
+  coord_flip() +
+  facet_grid(thromb_group~.,scales = "free_y", space = "free_y",switch = "y") +
+  labs(x = NULL, y = "Number of ICD10 records") +
+  theme_test() + ggtitle("Thrombosis events: N = 42,659") +
+  scale_fill_manual(values = c("ATE" = "#00A087", "VTE" = "#4DBBD5")) + ylim(0,23000)
+
+df_icd <- ukb.icd10.thromb.df |>
+  count(ICD10, Diagnosis, thromb_group, thromb_subgroup,sort = TRUE) |>
+  mutate(label = paste0(ICD10, ": ", Diagnosis),
+         label = forcats::fct_reorder(label, n))
+
+
+
+p_icd <- ggplot(df_icd, aes(x = label, y = n, fill = thromb_group)) +
+  geom_col() +
+  coord_flip() +
+  labs(x = NULL, y = "Number of ICD10 records", fill = "Group") +
+  theme_test(base_size = 12)
+
+p_all
+p_sub
+p_icd
+
+pdf("chip_f2e.pdf",width = 8, height = 4)
+p_sub
+dev.off()
+
+write.table(df_icd,"chip_suppl_table_events.tsv",sep = "\t", quote = FALSE, row.names = FALSE)
+```
+
+### HR CHIP & disease
+```{r}
+#C92.Myeloid leukaemia
+disease.icd10 <- "^C92" ##Myeloid leukaemia
+disease_df.ml <- ukb.icd10.df |> filter(grepl(disease.icd10,ICD10)) |> filter(!duplicated(eid))
+HR.ls.ml <- CHIP_disease_HR(disease_df.ml, "CHIP", "Myeloid leukaemia")
+
+#C34.Primary lung cancer
+disease.icd10 <- "^C34"
+disease_df.plc <- ukb.icd10.df |> filter(grepl(disease.icd10,ICD10)) |> filter(!duplicated(eid))
+HR.ls.plc <- CHIP_disease_HR(disease_df.plc, "CHIP", "Primary lung cancer")
+
+#Thrombosis events
+event_name <- "Thrombosis events"
+disease_df.throm <- ukb.icd10.thromb.df |> filter(!duplicated(eid))
+HR.ls.throm <- CHIP_disease_HR(disease_df.throm, "CHIP", "Thrombosis events")
+```
+```{r}
+HR.ls.ml$pv
+HR.ls.plc$pv
+HR.ls.throm$pv
+
+#pdf("chip_f2a.pdf", width = 7, height= 6 )
+HR.ls.ml$plot
+HR.ls.plc$plot
+HR.ls.throm$plot
+#dev.off()
+```
+
+```{r}
+HR.throm.genes.ls <- lapply(c("DNMT3A","TET2","ASXL1","PPM1D","TP53","SRSF2","JAK2","SF3B1"), \(x){
+  df <- CHIP_disease_HR(disease_df.throm, x, "Thrombosis events")
+  return(df)
+})
+names(HR.throm.genes.ls) <- c("DNMT3A","TET2","ASXL1","PPM1D","TP53","SRSF2","JAK2","SF3B1")
+
+
+#pdf("chip_f2b.pdf", width = 7, height= 6 )
+HR.throm.genes.ls$DNMT3A$plot
+HR.throm.genes.ls$TET2$plot
+HR.throm.genes.ls$ASXL1$plot
+HR.throm.genes.ls$PPM1D$plot
+HR.throm.genes.ls$TP53$plot
+HR.throm.genes.ls$SRSF2$plot
+HR.throm.genes.ls$JAK2$plot
+HR.throm.genes.ls$SF3B1$plot
+#dev.off()
+```
+
+```{r}
+CHIP_disease_HR <- function(disease_df, ch = "CHIP", event_name, suv_col = c("#AFC4E3", "#3C5488", "#C6DDD8", "#7BA39D", "#E6DE7A", "#B5AA0F")
+) {
+  
+  ch_a <- paste0(ch, ".all")
+  ch_s <- paste0(ch, ".sma")
+  ch_l <- paste0(ch, ".lar")
+  
+  var.arr <- c("Sex", "Age", "BMI", "Smoking", "pc1", "pc2", "pc3", "pc4", "pc5", "pc6", "pc7", "pc8", "pc9", "pc10", "statin", "antidiabetic", "antithrombotic")
+  
+  disease_df <- disease_df |> inner_join(chip_mat.phen.df, by = "eid") |> 
+    mutate( Sex = as.integer(Sex == "Male"), Smoking = as.integer(Smoking == "Yes") ) |>
+    filter(.data[[ch_a]] == 1 | CHIP.all == 0) |> 
+    mutate( CH_all = .data[[ch_a]], CH_small = .data[[ch_s]], CH_large = .data[[ch_l]], 
+            time = if_else( status == 0, as.Date("2024-12-30") - date, Date_Death - date), 
+            time_years = as.numeric(time) / 365.25)
+  
+  results <- list(fit = list(), plot = list(), pv = list())
+  
+  # Cox: all CHIP
+  model <- coxph(reformulate(c(var.arr, "CH_all"), response = "Surv(time_years, status)"), data = disease_df)
+  results$fit$cox_a <- model
+  results$plot$cox_a <- ggforest(model,data = disease_df,main = paste0("Hazard ratio (", event_name, ")"))
+  
+  # Cox: small / large clone
+  model <- coxph(reformulate(c(var.arr, "CH_small", "CH_large"), response = "Surv(time_years, status)"),data = disease_df)
+  results$fit$cox_o <- model
+  results$plot$cox_o <- ggforest(model,data = disease_df,main = paste0("Hazard ratio (", event_name, ")"))
+  
+  # KM: all CHIP
+  fit <- survfit(Surv(time_years, status) ~ CH_all, data = disease_df)
+  results$fit$suv_a <- fit
+  
+  sdiff <- survdiff(Surv(time_years, status) ~ CH_all, data = disease_df)
+  results$pv$all <- pchisq(sdiff$chisq, df = length(sdiff$n) - 1, lower.tail = FALSE)
+  p_lab <- paste0("Log-rank p = ", signif(results$pv$all, 3))
+  
+  results$plot$suv_a <- ggsurvplot(fit,data = disease_df,palette = suv_col[1:2],
+                                   risk.table = TRUE,ncensor.plot = FALSE,pval = p_lab,
+                                   conf.int = FALSE,xlab = "Time in years",
+                                   title = paste0("Overall survival (", event_name, "): ", ch, " overall"),
+                                   xlim = c(0, 20),break.time.by = 5,censor = TRUE,
+                                   censor.shape = 124,censor.size = 1.5,size = 0.6)
+  
+  # KM: small clone
+  disease_df_s <- disease_df |> filter(CH_small == 1 | CHIP.all == 0)
+  
+  fit <- survfit(Surv(time_years, status) ~ CH_small, data = disease_df_s)
+  results$fit$suv_s <- fit
+  
+  sdiff <- survdiff(Surv(time_years, status) ~ CH_small, data = disease_df_s)
+  results$pv$sma <- pchisq(sdiff$chisq, df = length(sdiff$n) - 1, lower.tail = FALSE)
+  p_lab <- paste0("Log-rank p = ", signif(results$pv$sma, 3))
+  
+  results$plot$suv_s <- ggsurvplot(fit,data = disease_df_s,palette = suv_col[3:4],
+                                   risk.table = TRUE,ncensor.plot = FALSE,pval = p_lab,
+                                   conf.int = FALSE,xlab = "Time in years",
+                                   title = paste0("Overall survival (", event_name, "): ", ch, " small"),
+                                   xlim = c(0, 20),break.time.by = 5,censor = TRUE,
+                                   censor.shape = 124,censor.size = 1.5,size = 0.6)
+  
+  # KM: large clone
+  disease_df_l <- disease_df |>
+    filter(CH_large == 1 | CHIP.all == 0)
+  
+  fit <- survfit(Surv(time_years, status) ~ CH_large, data = disease_df_l)
+  results$fit$suv_l <- fit
+  
+  sdiff <- survdiff(Surv(time_years, status) ~ CH_large, data = disease_df_l)
+  results$pv$lar <- pchisq(sdiff$chisq, df = length(sdiff$n) - 1, lower.tail = FALSE)
+  p_lab <- paste0("Log-rank p = ", signif(results$pv$lar, 3))
+  
+  results$plot$suv_l <- ggsurvplot(fit,data = disease_df_l,palette = suv_col[5:6],
+                                   risk.table = TRUE,ncensor.plot = FALSE,
+                                   pval = p_lab,conf.int = FALSE,xlab = "Time in years",
+                                   title = paste0("Overall survival (", event_name, "): ", ch, " large"),
+                                   xlim = c(0, 20),break.time.by = 5,censor = TRUE,
+                                   censor.shape = 124,censor.size = 1.5,size = 0.6)
+  
+  return(results)
+}
+```
+
+
+
+### Blood biomarker odd ratio
+```{r}
+events <- c(colnames(ukb_blood_count_df)[!grepl("_pct$|eid$|_ratio$",colnames(ukb_blood_count_df))],
+            colnames(ukb.biochem.df)[-1])
+tmp.or.list <- lapply(events,function(x){
+  #x  <- "PLT_10e9_L"
+  #df <- chip_mat.phen.df |> filter(eid %in% unique(eid.ls$CBC,eid.ls$Biochem))
+  df <- chip_mat.phen.df |> filter(eid %in% eid.ls$Biochem)
+  df$event <- scale(df[,x])
+  or <- AbelR::plot_logistic_forest(df, outcome = "CHIP.all", predictors = c(colnames(chip_mat.phen.df)[c(2,3,4,6,7:19)], "event"))
+  or <- or$or["event",]
+  rownames(or) <- paste0(x)
+  return(or)
+})
+
+biomarker.or <- do.call(rbind,tmp.or.list)
+
+biomarker.or$term <- rownames(biomarker.or)
+biomarker.or$type <- c(rep("BloodCount",18),rep("BioChemistry",30))
+biomarker.or <- biomarker.or |> arrange(estimate) |> mutate(term = factor(term, levels = term))
+```
+```{r}
+biomarker.or <- biomarker.or |> mutate(label = paste0(round(estimate, 3), " (", round(conf.low, 3), "-", round(conf.high, 3), ") ",stars))
+biomarker.or |> filter(type == "BloodCount") |> filter(p.value < 0.05) |> 
+  ggplot( aes(x = term, y = estimate, ymin = conf.low, ymax = conf.high)) +
+    geom_pointrange(color = "firebrick") +
+    geom_hline(yintercept = 1, linetype = 2, color = "grey50") +
+    geom_text(aes(label = label), vjust = -1.2,  color = "black") + 
+    coord_flip() +
+    labs(y = "Odds Ratio (95% CI)", x = "", title = "Logistic regression CHIP") +
+    #theme_minimal()
+    theme_test() 
+
+p_bm <- biomarker.or |> filter(type == "BioChemistry") |> filter(p.value < 0.05) |> 
+  ggplot( aes(x = term, y = estimate, ymin = conf.low, ymax = conf.high)) +
+    geom_pointrange(color = "firebrick", size = 1.5) +
+    geom_hline(yintercept = 1, linetype = 2, color = "grey50") +
+    geom_text(aes(label = label), vjust = -1.2,  color = "black") + 
+    coord_flip() +
+    labs(y = "Odds Ratio (95% CI)", x = "", title = "Logistic regression CHIP") +
+    #theme_minimal()
+    theme_test() 
+p_bm
+pdf("chip_f4g.pdf",width = 8,height =6,useDingbats = FALSE)
+p_bm
+dev.off()
+#write.table(biomarker.or,"ukb.biomarker.oddratio.txt",sep = "\t",row.names = FALSE)
+```
+
+### NMR meta & CHIP
+```{r}
+#events <- colnames(ukb_metabolic_df)[!grepl("(%)|eid$",colnames(ukb_metabolic_df))]
+events <- colnames(ukb_metabolic_df)[!grepl("eid$",colnames(ukb_metabolic_df))]
+
+tmp.or.list <- lapply(events,function(x){
+  #x  <- "PLT_10e9_L"
+  df <- chip_mat.phen.df |> inner_join(ukb_metabolic_df, by = c("eid"))
+  df$event <- scale(log1p(df[,x]))
+  or <- AbelR::plot_logistic_forest(df, outcome = "CHIP.all", predictors = c(colnames(chip_mat.phen.df)[c(2,3,4,6,7:16)], "event"))
+  or <- or$or["event",]
+  rownames(or) <- paste0(x)
+  return(or)
+})
+
+nmr_meta.or <- do.call(rbind,tmp.or.list)
+nmr_meta.or$term <- rownames(nmr_meta.or)
+nmr_meta.or <- nmr_meta.or |> arrange(estimate) |> mutate(term = factor(term, levels = term))
+```
+
+```{r}
+nmr_meta.or[c(1:5,247:251),] |> filter(p.value < 0.05) |> 
+  ggplot( aes(x = term, y = estimate, ymin = conf.low, ymax = conf.high)) +
+    geom_pointrange(color = "firebrick") +
+    geom_hline(yintercept = 1, linetype = 2, color = "grey50") +
+    geom_text(aes(label = label), vjust = -1.2,  color = "black") + 
+    coord_flip() +
+    labs(y = "Odds Ratio (95% CI)", x = "", title = "Logistic regression CHIP") +
+    #theme_minimal()
+    theme_test() 
+```
+### olink & CHIP
+```{r}
+olink.df <- fread("olink_instance_0.NPX.csv")
+keep_protein <- colnames(olink.df)[colMeans(!is.na(olink.df)) > 0.8]
+keep_eid <- olink.df$eid[rowMeans(!is.na(olink.df)) > 0.8]
+index_protein <- match(keep_protein,colnames(olink.df))
+index_eid <- match(keep_eid, olink.df$eid)
+olink.df <- olink.df[index_eid,..index_protein]
+```
+```{r}
+events <- colnames(olink.df)[!grepl("eid$",colnames(olink.df))]
+
+tmp.or.list <- lapply(events,function(x){
+  #x  <- "fam20a"
+  df <- chip_mat.phen.df |> inner_join(olink.df, by = c("eid"))
+  df$event <- scale(df[,x])
+  or <- AbelR::plot_logistic_forest(df, outcome = "CHIP.all", predictors = c(colnames(chip_mat.phen.df)[c(2,3,4,6,7:19)], "event"))
+  or <- or$or["event",]
+  rownames(or) <- paste0(x)
+  return(or)
+})
+
+olink.or <- do.call(rbind,tmp.or.list)
+olink.or$term <- rownames(olink.or)
+olink.or <- olink.or |> arrange(estimate) |> mutate(term = factor(term, levels = term))
+```
+
+```{r}
+olink.or[c(1:8,2903:2911),] |> filter(p.value < 0.05) |> 
+  ggplot( aes(x = term, y = estimate, ymin = conf.low, ymax = conf.high)) +
+    geom_pointrange(color = "firebrick") +
+    geom_hline(yintercept = 1, linetype = 2, color = "grey50") +
+    geom_text(aes(label = label), vjust = -1.2,  color = "black") + 
+    coord_flip() +
+    labs(y = "Odds Ratio (95% CI)", x = "", title = "Logistic regression CHIP") +
+    #theme_minimal()
+    theme_test() 
+```
+
+#### GASE
+```{r}
+olink_anno.df <- fread("olink_resources/coding143.tsv") |> mutate(Protein = str_to_lower(str_replace(meaning, ";.*", ""))) |>  mutate(Symbol = str_replace(meaning, ";.*", ""))
+olink_assay.df <- fread("olink_resources/olink_assay.dat") %>% mutate(Assay = tolower(Assay))
+all(olink_anno.df$Protein %in% olink_assay.df$Assay)
+olink_anno.df <- olink_anno.df |> left_join(olink_assay.df, by = c("Protein" = "Assay"))
+
+#olink_anno.df$Protein
+```
+
+```{r}
+olink.or[!olink.or$term %in% olink_anno.df$Protein,]$term <- c("hla-dra","hla-a","hla-e","ervv-1")
+```
+
+```{r}
+olink.or$score <- sign(log2(olink.or$estimate)) * -log10(olink.or$p.value)
+olink.or <- olink.or |>  arrange(desc(score)) %>% mutate(RANK = row_number())
+olink.or <- olink.or |> left_join(olink_anno.df, by = c("term" = "Protein"))
+olink.or$Entrez <- TransGeneID(olink.or$Symbol, "Symbol", "Entrez", organism = "hsa")
+olink.or[is.na(olink.or$Entrez),]
+```
+
+```{r}
+  deg.df <- olink.or |> filter(! is.na(Entrez))
+  library(msigdbr)
+  m_t2g.H <- msigdbr(species = "Homo sapiens", category = "H") %>% dplyr::select(gs_name, entrez_gene)
+  gene.fc <- deg.df$score
+  names(gene.fc) <- deg.df$Entrez
+  gene.fc<-sort(gene.fc, decreasing = TRUE)
+  gsea.H <- GSEA(gene.fc, TERM2GENE = m_t2g.H, pvalueCutoff = 1)
+  gsea.H <- setReadable(gsea.H, org.Hs.eg.db, keyType = "ENTREZID")
+  gsea.kegg <-  gseKEGG(gene.fc, organism = "hsa", keyType = "kegg", pvalueCutoff = 1)
+  gsea.kegg <- setReadable(gsea.kegg, org.Hs.eg.db, keyType = "ENTREZID")
+  gsea.go_bp <- gseGO(gene.fc, org.Hs.eg.db, ont = "BP", pvalueCutoff = 1, keyType = "ENTREZID")
+  gsea.go_bp <- setReadable(gsea.go_bp, org.Hs.eg.db, keyType = "ENTREZID")
+```
+
+
+```{r}
+plot.list1 <- lapply(c("hsa05202", "hsa05221", "hsa04672", "hsa04919"),function(x){
+  gsea_plot_custorm(gsea.kegg,x,"#7BA39D",xpos = 1000)
+})
+
+plot.list2 <- lapply(c("hsa04151", "hsa04979", "hsa03320", "hsa04060"),function(x){
+  gsea_plot_custorm(gsea.kegg,x,"#3C5488",xpos = 1000)
+})
+
+plot_grid(plotlist = plot.list1)
+plot_grid(plotlist = plot.list2)
+```
+
+```{r}
+gsea_plot_custorm(gsea.go_bp,"GO:0008015","#B5AA0F",xpos = 1000)
+gsea_plot_custorm(gsea.go_bp,"GO:0035295","#B5AA0F",xpos = 1000)
+
+gsea.plot <- gsea.go_bp@result |> select(Description, NES, pvalue, p.adjust) |>  top_n(n=40, wt = -pvalue)
+
+gsea.plot$Group <- "Up"
+gsea.plot[gsea.plot$NES < 0,]$Group <- "Down"
+gsea.plot$Lable <- "GO_BP"
+
+ggplot(gsea.plot, aes(x = NES, y = Description, fill = Group)) + geom_col() + theme_test() + geom_vline(xintercept = 0)
+
+ggplot(gsea.plot, aes(x = Lable, y = fct_reorder(Description, -log10(pvalue)))) + geom_point(aes(size = -log10(pvalue), color = NES)) + theme_test() + scale_color_gradient2(low = "#08306B",mid = "grey90", high = "#67000D")
+```
+
+```{r}
+iogo <- "GO:0008015"
+iogo <- "GO:0035295"
+target_genes <- gsea.go_bp@result |> filter(ID ==iogo) |> pull(core_enrichment) |> strsplit("/") |> unlist()
+target_desc <- gsea.go_bp@result |> filter(ID ==iogo) |> pull(Description)
+
+  library("ggrastr")
+  gg <- olink.or
+  iof <- target_genes
+  gg$label <- ""
+  gg[match(iof,gg$Symbol),]$label <- iof
+  p <- ggplot(gg, aes(x = RANK/1000, y= score))
+  p <- p + geom_point_rast(color = "grey", shape = 16, size = 2, alpha = 0.6, show.legend = FALSE)
+  p <- p + geom_point(color = ifelse(gg$label == "" ,NA,"#B5AA0F"), shape = 16, size = 2, alpha = 0.6, show.legend = FALSE)
+  p <- p + geom_point(color = ifelse(gg$label == "" ,NA,"black"), shape = 1, size = 2, show.legend = FALSE)
+  p = p + ggrepel::geom_text_repel(aes(label=label),color="#B5AA0F",show.legend = FALSE,fontface = "bold", size = 2.5,box.padding = unit(0.8, "lines"),point.padding = unit(0.3, "lines"), segment.size = 0.3, max.overlaps = 8000)
+  p = p + geom_hline(yintercept = 0, linetype = "dotted")
+  p + theme_test()  + ggtitle(target_desc) + ylab("Score")
+```
+
+#### AML vs non-Cancer
+```{r}
+olink.df$eid
+disease.icd10 <- "^C92" ##Myeloid leukaemia
+
+ukb.icd10.df
+
+aml_df <- ukb.icd10.df |> filter(grepl("^C92.0|^C92.5|^C92.6|^C92.8",ICD10)) |> filter(!duplicated(eid))
+cancer_df <- ukb.icd10.df |> filter(Category == "Neoplasms (Tumors)") |> filter(!duplicated(eid))
+aml_olink.eid <- olink.df$eid[olink.df$eid %in% aml_df$eid] 
+non_olink.eid <- olink.df$eid[!olink.df$eid %in% cancer_df$eid] 
+#non_olink.eid <- olink.df$eid[!olink.df$eid %in% ukb.icd10.df$eid] 
+
+
+aml.ogt <- olink.df |> filter(eid %in% aml_olink.eid) |> select(ogt) |> filter(! is.na(ogt))
+non.ogt <- olink.df |> filter(eid %in% non_olink.eid) |> select(ogt) |> filter(! is.na(ogt))
+
+
+aml.ogt$Group <- "AML"
+non.ogt$Group <- "non-Cancer"
+
+mean(aml.ogt$ogt)
+mean(non.ogt$ogt)
+```
+
+```{r}
+plot.df <- rbind(aml.ogt,non.ogt)
+
+ggplot(plot.df, aes(y = ogt, x = Group)) + geom_violin(aes(fill = Group)) + theme_test() + geom_boxplot(width=0.1) +
+  scale_fill_manual(values = c("#3C5488FF", "#00A087FF")) + 
+  stat_compare_means(method = "wilcox.test",paired = FALSE, label = "p.signif",
+                       comparisons=list(c("AML", "non-Cancer")))
+```
+
+###Competing risks
+
+#### dataframe
+```{r}
+lag_days <- 180
+event_name <- "Thrombosis events"
+
+competing_risk.df <- ukb.icd10.thromb.df |> group_by(eid) |> slice_min(order_by = date) |> ungroup() |> filter(!duplicated(eid))
+competing_risk.df <- competing_risk.df |> right_join(chip_mat.phen.df,by = "eid")
+competing_risk.df <- competing_risk.df |> mutate(Sex = as.integer(Sex == "Male"),Smoking = as.integer(Smoking == "Yes"))
+competing_risk.df$assess_date <- competing_risk.df$Date
+
+competing_risk.df <- competing_risk.df |> filter(is.na(date) | date > (assess_date + lag_days)) |>
+  mutate(end_date = pmin(date,as.Date("2024-12-31"),Date_Death, na.rm = TRUE),
+         time = as.numeric(end_date - assess_date),
+         status = case_when(!is.na(date) & date <= end_date ~ 1,
+                            is.na(date) & !is.na(Date_Death) & Date_Death <= as.Date("2024-12-31") ~ 2,
+                            TRUE ~ 0
+                            )
+         )
+
+competing_risk.df |> group_by(status, CHIP.all) |> summarise(n())
+competing_risk.df$status <- as.factor(competing_risk.df$status)
+
+mycol3 <- c("#AFC4E3","#3C5488","#C6DDD8","#7BA39D","#E6DE7A","#B5AA0F","#E88FB5","#C81E76")
+```
+
+```{r}
+competing_risk.result <- list()
+competing_risk.result$throm <- competing_risk_plot(competing_risk.df,"CHIP.all","Thrombosis event")
+#competing_risk.result$hyper <- competing_risk_plot(competing_risk.df |> filter(is.na(thromb_group) | thromb_group == "Hypercoagulability"),"CHIP.all","Hypercoagulability")
+competing_risk.result$ate <- competing_risk_plot(competing_risk.df |> filter(is.na(thromb_group) | thromb_group == "ATE"),"CHIP.all","ATE")
+competing_risk.result$vte <- competing_risk_plot(competing_risk.df |> filter(is.na(thromb_group) | thromb_group == "VTE"),"CHIP.all","VTE")
+```
+```{r}
+pdf("chip_f2c.pdf", width = 5 , height = 5, useDingbats = FALSE)
+competing_risk.result$throm$cr_plot
+competing_risk.result$hyper$cr_plot
+competing_risk.result$ate$cr_plot 
+competing_risk.result$vte$cr_plot
+dev.off()
+```
+
+```{r}
+competing_risk.result$vte.tet2 <- competing_risk_plot(competing_risk.df |> filter(is.na(thromb_group) | thromb_group == "VTE") |> filter(CHIP.all == 0 |  TET2.all== 1),"TET2.all","VTE")
+competing_risk.result$vte.ppm1d <- competing_risk_plot(competing_risk.df |> filter(is.na(thromb_group) | thromb_group == "VTE") |> filter(CHIP.all == 0 |  PPM1D.all== 1),"PPM1D.all","VTE")
+competing_risk.result$ate.tet2 <- competing_risk_plot(competing_risk.df |> filter(is.na(thromb_group) | thromb_group == "ATE") |> filter(CHIP.all == 0 |  TET2.all== 1),"TET2.all","ATE")
+competing_risk.result$ate.ppm1d <- competing_risk_plot(competing_risk.df |> filter(is.na(thromb_group) | thromb_group == "ATE") |> filter(CHIP.all == 0 |  PPM1D.all== 1),"PPM1D.all","ATE")
+```
+```{r}
+competing_risk.result$vte.dnmt3a <- competing_risk_plot(competing_risk.df |> filter(is.na(thromb_group) | thromb_group == "VTE") |> filter(CHIP.all == 0 |  DNMT3A.all== 1),"DNMT3A.all","VTE")
+competing_risk.result$vte.asxl1 <- competing_risk_plot(competing_risk.df |> filter(is.na(thromb_group) | thromb_group == "VTE") |> filter(CHIP.all == 0 |  ASXL1.all== 1),"ASXL1.all","VTE")
+competing_risk.result$ate.dnmt3a <- competing_risk_plot(competing_risk.df |> filter(is.na(thromb_group) | thromb_group == "ATE") |> filter(CHIP.all == 0 |  DNMT3A.all== 1),"DNMT3A.all","ATE")
+competing_risk.result$ate.asxl1 <- competing_risk_plot(competing_risk.df |> filter(is.na(thromb_group) | thromb_group == "ATE") |> filter(CHIP.all == 0 |  ASXL1.all== 1),"ASXL1.all","ATE")
+```
+
+```{r}
+competing_risk.result$vte.dnmt3a$cr_plot
+competing_risk.result$vte.asxl1$cr_plot
+competing_risk.result$vte.ppm1d$cr_plot
+competing_risk.result$vte.tet2$cr_plot
+
+competing_risk.result$ate.dnmt3a$cr_plot
+competing_risk.result$ate.asxl1$cr_plot
+competing_risk.result$ate.ppm1d$cr_plot
+competing_risk.result$ate.tet2$cr_plot
+```
+```{r}
+
+ch <- c("DNMT3A.all","ASXL1.all","TET2.all","PPM1D.all")
+var.arr = c("Sex","Age","BMI","Smoking","pc1","pc2","pc3","pc4","pc5","pc6","pc7","pc8","pc9","pc10","statin","antidiabetic","antithrombotic")
+   df <- competing_risk.df |> filter(is.na(thromb_group) | thromb_group == "VTE") |> filter(CHIP.all == 0 |  DNMT3A.all== 1 | ASXL1.all == 1 | TET2.all == 1 | PPM1D.all == 1 )
+  fg <- finegray(reformulate(c(ch, var.arr,"eid"), response = "Surv(time/365.25, status)"), data=df, etype = 1)
+  fit_fg_adj <- coxph(reformulate(c(ch,var.arr), response = "Surv(fgstart, fgstop, fgstatus)"),data = fg, weights = fgwt, ties = "efron", robust = TRUE,cluster = eid)
+  ggforest(fit_fg_adj, data = fg, main = "sHR (Fine-Gray Model)")
+  
+  vte.fg.sHR.df <- do.call(rbind,lapply(ch,function(x){extract_coxph(fit_fg_adj,x,"VTE")}))
+  
+  df <- competing_risk.df |> filter(is.na(thromb_group) | thromb_group == "ATE") |> filter(CHIP.all == 0 |  DNMT3A.all== 1 | ASXL1.all == 1 | TET2.all == 1 | PPM1D.all == 1 )
+  fg <- finegray(reformulate(c(ch, var.arr,"eid"), response = "Surv(time/365.25, status)"), data=df, etype = 1)
+  fit_fg_adj <- coxph(reformulate(c(ch,var.arr), response = "Surv(fgstart, fgstop, fgstatus)"),data = fg, weights = fgwt, ties = "efron", robust = TRUE,cluster = eid)
+  ggforest(fit_fg_adj, data = fg, main = "sHR (Fine-Gray Model)")
+  ate.fg.sHR.df <- do.call(rbind,lapply(ch,function(x){extract_coxph(fit_fg_adj,x,"ATE")}))
+```
+```{r}
+df_plot <- rbind(ate.fg.sHR.df,vte.fg.sHR.df)
+df_plot <- df_plot |> dplyr::mutate(p_lab = case_when(p < 0.0001 ~ "****", p < 0.001 ~ "***", p < 0.01  ~ "**", p < 0.05  ~ "*", TRUE ~ "ns"))
+df_plot <- df_plot |> dplyr::mutate(label = paste0(round(HR, 2), " [", round(lower, 2), "-", round(upper, 2), "] ",p_lab))
+df_plot$Model <- factor(df_plot$Model, levels = rev(c("VTE", "ATE")))
+df_plot$Variable <- factor(df_plot$Variable, levels = c("DNMT3A.all","TET2.all","ASXL1.all","PPM1D.all"))
+p_shr <- ggplot(df_plot, aes(y = Model, x = HR)) + 
+    geom_point(aes(color = Model),size = 5,show.legend = FALSE, shape = 16) +
+    geom_errorbarh(aes(xmin = lower, xmax = upper,color = Model), height = 0.1,show.legend = FALSE) +
+    geom_vline(xintercept = 1, linetype = 2, color = "grey50") +
+    scale_color_manual(values =c("#4DBBD5","#00A087")) + 
+    geom_text(aes(x = HR , label = label), vjust = -1,show.legend = FALSE) + 
+    theme_test() + ylab("Fine–Gray model") + facet_grid(Variable~.,scales = "free_y", switch = "y") + 
+    xlab("Subdistribution Hazard Ratio (sHR)")
+
+p_shr
+ 
+pdf("chip_f2f.pdf",width = 5 , height = 5, useDingbats = FALSE)
+p_shr
+dev.off()
+```
+
+#### function
+```{r}
+extract_coxph <- function(fit, var_name, label){
+  s <- summary(fit)$coefficients
+  data.frame(
+    Model = label,
+    Variable = var_name,
+    HR = s[var_name, "exp(coef)"],
+    lower = exp(s[var_name, "coef"] - 1.96 * s[var_name, "se(coef)"]),
+    upper = exp(s[var_name, "coef"] + 1.96 * s[var_name, "se(coef)"]),
+    p = s[var_name, "Pr(>|z|)"]
+  )
+}
+
+competing_risk_plot <- function(df, ch, event, var.arr = c("Sex","Age","BMI","Smoking","pc1","pc2","pc3","pc4","pc5","pc6","pc7","pc8","pc9","pc10")){
+  library(survival)
+#  df = competing_risk.df 
+ # ch = "CHIP.all"
+  #event = "Thrombosis event"
+  #var.arr <- c("Sex","Age","BMI","Smoking","pc1","pc2","pc3","pc4","pc5","pc6","pc7","pc8","pc9","pc10")
+  
+  mycol3 <- c("#AFC4E3","#3C5488","#C6DDD8","#7BA39D","#E6DE7A","#B5AA0F")
+  result = list()
+  ############fine-gray model 
+  fg <- finegray(reformulate(c(ch, var.arr,"eid"), response = "Surv(time/365.25, status)"), 
+               data=df, etype = 1)
+  fit_fg_crude <- coxph(reformulate(c(ch), response = "Surv(fgstart, fgstop, fgstatus)"),
+                     data = fg, weights = fgwt, ties = "efron", robust = TRUE,cluster = eid)
+  fit_fg_adj <- coxph(reformulate(c(ch,var.arr), response = "Surv(fgstart, fgstop, fgstatus)"),
+                     data = fg, weights = fgwt, ties = "efron", robust = TRUE,cluster = eid)
+  result$adj <- ggforest(fit_fg_adj, data = fg, main = "sHR (Fine-Gray Model)")
+  result$unadj <- ggforest(fit_fg_crude, data = fg, main = "sHR (Fine-Gray Model)")
+  df_plot <- bind_rows(extract_coxph(fit_fg_crude, ch, "Unadjusted"), extract_coxph(fit_fg_adj, ch, "Adjusted"))
+  df_plot <- df_plot |> dplyr::mutate(p_lab = case_when(p < 0.0001 ~ "****", p < 0.001 ~ "***", p < 0.01  ~ "**", p < 0.05  ~ "*", TRUE ~ "ns"))
+  df_plot <- df_plot |> dplyr::mutate(label = paste0(round(HR, 2), " [", round(lower, 2), "-", round(upper, 2), "] ",p_lab))
+  df_plot$Model <- factor(df_plot$Model, levels = c("Unadjusted", "Adjusted"))
+  p1 <- ggplot(df_plot, aes(y = Model, x = HR)) + 
+    geom_point(aes(color = Model),size = 4,show.legend = FALSE) +
+    geom_errorbarh(aes(xmin = lower, xmax = upper,color = Model), height = 0.1,show.legend = FALSE) +
+    geom_vline(xintercept = 1, linetype = 2, color = "grey50") +
+    scale_x_log10() + scale_color_manual(values = mycol3[1:2]) + 
+    geom_text(aes(x = HR , label = label), vjust = -1,show.legend = FALSE) + 
+    theme_test() + ylab("Fine–Gray model") + 
+    xlab("Subdistribution Hazard Ratio (sHR)") 
+#(Death as competing event)
+
+################ CIF (Cumulative incidence function)
+  library(cmprsk)
+  ci <- cuminc(ftime = df$time/365.25, fstatus = df$status, group = df[[ch]]) 
+  result$cif <- ci
+
+  df_cif <- rbind(
+    #data.frame(time=ci[["0 2"]]$time, est=ci[["0 2"]]$est, grp="Death CHIP=0"),
+    #data.frame(time=ci[["1 2"]]$time, est=ci[["1 2"]]$est, grp="Death CHIP=1"),
+    data.frame(time=ci[["0 1"]]$time, est=ci[["0 1"]]$est, grp="CHIP-"),
+    data.frame(time=ci[["1 1"]]$time, est=ci[["1 1"]]$est, grp="CHIP+")
+  )
+  pval_cif <- ci$Tests[1, "pv"]
+  lab <- ifelse(pval_cif < 0.001,"Gray's test P < 0.001",paste0("Gray's test P = ", sprintf("%.3f", pval_cif)))
+  p2 <- ggplot(df_cif, aes(time, est, color=grp)) +
+    geom_step(size=1) +
+    labs(x="Years", y="Cumulative incidence", color="Group") +
+    annotate("text", x = 10, y = max(df_cif$est) * 0.25, label = lab, hjust = 0) +
+    theme_test() + theme(legend.position = "inside", legend.position.inside = c(0.15,0.75)) +
+    scale_color_manual(values = mycol3[1:2])   
+
+  result$cr_plot <- p2 / p1 + plot_layout(heights = c(2.5, 1))  + 
+    plot_annotation(title = paste0(event," (exposure = ", ch,")"), 
+                    theme = theme(plot.title = element_text(hjust = 0.5,face = "bold"))) 
+  return(result)
+}
+```
+
+## 04. CHIP vs Olink
+### phenotype
+```{r}
+olink.df <- fread("olink_instance_0.NPX.csv")
+keep_protein <- colnames(olink.df)[colMeans(!is.na(olink.df)) > 0.8]
+keep_eid <- olink.df$eid[rowMeans(!is.na(olink.df)) > 0.8]
+index_protein <- match(keep_protein,colnames(olink.df))
+index_eid <- match(keep_eid, olink.df$eid)
+olink.df <- olink.df[index_eid,..index_protein]
+
+protein.arr <- setdiff(colnames(olink.df), "eid")
+
+ukb_wes_all_eid <- eid.ls$Olink
+chip_mut_df <- data.frame(eid = ukb.maf.df$Tumor_Sample_Barcode, CHIP = paste0(ukb.maf.df$Hugo_Symbol,":",ukb.maf.df$AAChange))
+olink_wes.df <- olink.df |> filter(eid %in% ukb_wes_all_eid) |> left_join(chip_mat.phen.df, by = c("eid"))
+```
+
+```{r}
+olink_wes.df |> group_by(CHIP.all) |> summarise(Num = n())
+olink_wes.df <- as.data.frame(olink_wes.df)
+```
+
+```{r}
+ggplot(olink_wes.df, aes(x = CHIP.all, y = Age)) + geom_violin(aes(fill = CHIP.all)) + geom_boxplot(width  = 0.25) + theme_test() 
+ggplot(olink_wes.df, aes(x = Sex, y = Age)) + geom_violin(aes(fill = CHIP.all)) + theme_test() 
+ggplot(olink_wes.df, aes(x = Sex, y = Age)) + geom_violin(aes(fill = Sex)) + geom_boxplot(width  = 0.25) + theme_test() 
+ggplot(olink_wes.df, aes(x = CHIP.all, y = BMI)) + geom_violin(aes(fill = CHIP.all)) + geom_boxplot(width  = 0.25) + theme_test() 
+```
+
+### limma diff
+```{r}
+library(limma)
+var.arr <- c("Age", "Sex", "Smoking","BMI","pc1","pc2","pc3","pc4","pc5","pc6","pc7","pc8","pc9","pc10","statin","antidiabetic","antithrombotic")
+expr.df <- olink_wes.df[complete.cases(olink_wes.df[, var.arr]), ]
+design <- model.matrix(reformulate(c("CHIP.all",var.arr)), expr.df)
+
+expr <- expr.df[,protein.arr]
+rownames(expr) <- expr.df$eid
+#expr <- as.matrix(expr)
+#storage.mode(expr) <- "numeric"
+
+fit <- lmFit(t(expr), design)
+fit <- eBayes(fit)
+chip.olink.limma_df <- topTable(fit, coef="CHIP.all",number = Inf)
+```
+
+```{r}
+chip.olink.limma_df["a1bg",]
+fit$coefficients
+fit$stdev.unscaled * fit$sigma
+```
+
+```{r}
+olink_anno.df <- fread("olink_resources/coding143.tsv") |> mutate(Protein = str_to_lower(str_replace(meaning, ";.*", ""))) |>  mutate(Symbol = str_replace(meaning, ";.*", ""))
+olink_assay.df <- fread("olink_resources/olink_assay.dat") %>% mutate(Assay = tolower(Assay))
+all(olink_anno.df$Protein %in% olink_assay.df$Assay)
+olink_anno.df <- olink_anno.df |> left_join(olink_assay.df, by = c("Protein" = "Assay"))
+```
+```{r}
+p_olink <- limma_olink_volcano(chip.olink.limma_df,top=10, title = "Olink CH+ vs CH-")
+p_olink + theme(legend.position = "top")
+```
+
+```{r}
+pdf("chip_f4c.pdf",width = 6,height = 8)
+p_olink + theme(legend.position = "top")
+dev.off()
+```
+
+
+### GASE
+```{r}
+idx <- !rownames(chip.olink.limma_df) %in% olink_anno.df$Protein
+rownames(chip.olink.limma_df)[idx]
+sum(idx)
+rownames(chip.olink.limma_df)[idx] <- c("hla-dra", "ervv-1", "hla-e", "hla-a")
+sum(!rownames(chip.olink.limma_df) %in% olink_anno.df$Protein)
+```
+
+```{r}
+olink.lm <- chip.olink.limma_df
+#olink.lm$score <- sign(olink.lm$logFC) * -log10(olink.lm$P.Value)
+olink.lm$score <- olink.lm$t
+olink.lm <- olink.lm |>  arrange(desc(score)) %>% mutate(RANK = row_number())
+olink.lm$Protein <- rownames(olink.lm) 
+olink.lm <- olink.lm |> left_join(olink_anno.df, by = c("Protein"))
+olink.lm$Entrez <- TransGeneID(olink.lm$Symbol, "Symbol", "Entrez", organism = "hsa")
+olink.lm[is.na(olink.lm$Entrez),]
+```
+
+```{r}
+  deg.df <- olink.lm |> filter(! is.na(Entrez))
+  library(msigdbr)
+  m_t2g.H <- msigdbr(species = "Homo sapiens", category = "H") %>% dplyr::select(gs_name, entrez_gene)
+  gene.fc <- deg.df$score
+  names(gene.fc) <- deg.df$Entrez
+  gene.fc<-sort(gene.fc, decreasing = TRUE)
+  gsea.H <- GSEA(gene.fc, TERM2GENE = m_t2g.H, pvalueCutoff = 1)
+  gsea.H <- setReadable(gsea.H, org.Hs.eg.db, keyType = "ENTREZID")
+  gsea.kegg <-  gseKEGG(gene.fc, organism = "hsa", keyType = "kegg", pvalueCutoff = 1)
+  gsea.kegg <- setReadable(gsea.kegg, org.Hs.eg.db, keyType = "ENTREZID")
+  gsea.go_bp <- gseGO(gene.fc, org.Hs.eg.db, ont = "BP", pvalueCutoff = 1, keyType = "ENTREZID")
+  gsea.go_bp <- setReadable(gsea.go_bp, org.Hs.eg.db, keyType = "ENTREZID")
+  
+  
+write.table(gsea.go_bp@result |> filter(pvalue < 0.05), "chip_suppl_table_olinkgsea.tsv", row.names = FALSE, quote = FALSE, sep = "\t")
+```
+
+```{r}
+plot.list1 <- lapply(c("hsa05202", "hsa05221", "hsa04672", "hsa04919"),function(x){
+  gsea_plot_custorm(gsea.kegg,x,"#7BA39D",xpos = 1000)
+})
+
+plot.list2 <- lapply(c("hsa04151", "hsa04979", "hsa03320", "hsa04060"),function(x){
+  gsea_plot_custorm(gsea.kegg,x,"#3C5488",xpos = 1000)
+})
+
+plot_grid(plotlist = plot.list1)
+plot_grid(plotlist = plot.list2)
+```
+
+```{r}
+plot.list1 <- lapply(c("GO:0006325", "GO:0002250", "GO:0045088"),function(x){
+  gsea_plot_custorm(gsea.go_bp,x,"#B5AA0F",xpos = 1000)
+})
+
+plot.list2 <- lapply(c("GO:0097529", "GO:0060326", "GO:0008015"),function(x){
+  gsea_plot_custorm(gsea.go_bp,x,"#3C5488",xpos = 1000)
+})
+
+plot.list1
+plot.list2
+plot_grid(plotlist = c(plot.list1,plot.list2),nrow = 2)
+```
+```{r}
+pdf("chip_f4e.pdf",width = 10,height = 6)
+plot_grid(plotlist = c(plot.list1,plot.list2),nrow = 2)
+dev.off()
+```
+
+```{r}
+iof.gobp <- c(
+  "tube development",
+  "blood vessel development",
+  "angiogenesis",
+  "myeloid leukocyte migration",
+  "granulocyte migration",
+  "chromatin organization",
+  "cell chemotaxis",
+  "circulatory system process",
+  "blood circulation",
+  "chromosome segregation",
+  "chromatin remodeling",
+  "chromosome organization",
+  "adaptive immune response",
+  "mononuclear cell migration",
+  "regulation of immune response",
+  "regulation of innate immune response",
+  "DNA damage response",
+  "negative regulation of B cell proliferation"
+)
+
+#gsea.plot <- gsea.go_bp@result |> select(Description, NES, pvalue, p.adjust) |>  top_n(n=40, wt = -p.adjust)
+gsea.plot <- gsea.go_bp@result |> select(Description, NES, pvalue, p.adjust) |>  filter(Description %in% iof.gobp)
+
+gsea.plot$Group <- "Up"
+gsea.plot[gsea.plot$NES < 0,]$Group <- "Down"
+gsea.plot$Lable <- "GO_BP"
+
+#ggplot(gsea.plot, aes(x = NES, y = Description, fill = Group)) + geom_col() + theme_test() + geom_vline(xintercept = 0)
+
+p_go <- ggplot(gsea.plot, aes(x = Lable, y = fct_reorder(Description, -log10(p.adjust)))) + geom_point(aes(size = -log10(p.adjust), color = NES)) + theme_test() + scale_color_gradient2(low = "#08306B",mid = "grey90", high = "#67000D")
+p_go
+```
+
+```{r}
+pdf("chip_f4d.pdf",width = 4.5,height = 4)
+p_go
+dev.off()
+```
+```{r}
+p_core <- plot_gsea_core_genes(gsea.go_bp@result, "GO:0045088",c("CD14", "TLR1", "TLR2", "CD274", "VSIG4", "LILRA2", "LILRB1", "CLEC6A", "CLEC7A", "LAMP2", "TRIM21", "TRIM25"),color = "#B5AA0F") + plot_gsea_core_genes(gsea.go_bp@result, "GO:0060326",c("CCL2", "CCL5", "CCL8", "CCL14", "CCL18", "CCL21", "CCL24", "CXCL9", "CXCL10", "CXCL16", "CX3CL1", "VEGFA", "VEGFC", "SERPINE1", "PPBP"),color = "#3C5488")
+p_core
+```
+
+```{r}
+pdf("chip_f4f.pdf",width = 6,height = 4)
+p_core
+dev.off()
+```
+
+```{r}
+#iogo <- "GO:0008015"
+#iogo <- "GO:0002250"
+
+plot_gsea_core_genes <- function(gsea.res,iogo,label,color = "#B5AA0F"){
+  target_genes <- gsea.res|> filter(ID ==iogo) |> pull(core_enrichment) |> strsplit("/") |> unlist()
+  target_desc <-gsea.res |> filter(ID ==iogo) |> pull(Description)
+  library("ggrastr")
+  gg <- olink.lm
+  iof <-target_genes
+  gg$iof <- ""
+  gg[match(iof,gg$Symbol),]$iof <- iof
+  gg$label <- ""
+  gg[match(label,gg$Symbol),]$label <- label
+  p <- ggplot(gg, aes(x = RANK, y= score))
+  p <- p + geom_point_rast(color = "grey", shape = 16, size = 2, alpha = 0.6, show.legend = FALSE)
+  p <- p + geom_point(color = ifelse(gg$iof == "" ,NA,color), shape = 16, size = 2, alpha = 0.6, show.legend = FALSE)
+  p <- p + geom_point(color = ifelse(gg$iof == "" ,NA,"black"), shape = 1, size = 2, show.legend = FALSE)
+  p = p + ggrepel::geom_text_repel(aes(label=label),color=color,show.legend = FALSE,fontface = "bold", size = 2.5,box.padding = unit(1, "lines"),point.padding = unit(0.3, "lines"), segment.size = 0.3, max.overlaps = 2000)
+  p = p + geom_hline(yintercept = 0, linetype = "dotted")
+  p = p + theme_test()  + ggtitle(target_desc) + ylab("Moderated t statistic") + xlab("Protein rank")
+  return(p)
+}
+```
+
+
+## 05. CHIP vs blood count
+### combind CHIP
+```{r}
+cbc_traits.arr <- setdiff(colnames(ukb_blood_count_df), "eid")
+ukb_wes_all_eid <- eid.ls$CBC
+ukb_blood_count_df.chip <- chip_mat.phen.df |> filter(eid %in% ukb_wes_all_eid)
+```
+
+### limma diff
+```{r}
+library(limma)
+var.arr <- c("Age", "Sex", "Smoking","BMI","pc1","pc2","pc3","pc4","pc5","pc6","pc7","pc8","pc9","pc10","statin","antidiabetic","antithrombotic")
+expr.df <- ukb_blood_count_df.chip[complete.cases(ukb_blood_count_df.chip[, var.arr]), ]
+design <- model.matrix(reformulate(c("CHIP.all",var.arr)), expr.df)
+expr <- scale(expr.df[,cbc_traits.arr])
+rownames(expr) <- expr.df$eid
+
+fit <- lmFit(t(expr), design)
+fit <- eBayes(fit)
+chip.bloodcount.limma_df <- topTable(fit, coef="CHIP.all",number = Inf)
+```
+
+
+```{r}
+limma_bloodcount_volcano(limma_df = chip.bloodcount.limma_df, title = "CH+ vs CH-")
+```
+```{r}
+ggplot(ukb_blood_count_df.chip, aes(x = CHIP, y = log2(PLT_10e9_L))) + geom_violin(aes(fill = CHIP)) + geom_boxplot(width  = 0.25) + theme_test() 
+
+ggplot(ukb_blood_count_df.chip, aes(x = CHIP, y = PCT_pct)) + geom_violin(aes(fill = CHIP)) + geom_boxplot(width  = 0.25) + theme_test()
+
+ukb_blood_count_df.chip |> group_by(CHIP) |> summarise(mean(PLT_10e9_L))
+```
+
+```{r}
+p_cbc_1 <- limma_bloodcount_volcano(limma_df = chip.bloodcount.limma_df, title = "CH+ vs CH-")
+p_cbc_2 <- ggplot(ukb_blood_count_df.chip, aes(x = as.factor(CHIP.all), y = log2(PLT_10e9_L))) + geom_violin(aes(fill = as.factor(CHIP.all))) + geom_boxplot(width  = 0.25) + theme_test() 
+p_cbc_1 + p_cbc_2 + plot_layout(widths = c(2:1))
+
+pdf("chip_f4b.pdf", width = 6, height = 3.5)
+p_cbc_1 + p_cbc_2 + plot_layout(widths = c(2:1))
+dev.off()
+```
+
+```{r}
+ggplot(ukb_blood_count_df.chip, aes(x = as.factor(CHIP.all), y = log2(Neutrophils_10e9_L))) + geom_violin(aes(fill = as.factor(CHIP.all))) + geom_boxplot(width  = 0.25) + theme_test()
+```
+
+###biochem limma
+```{r}
+biochem_traits.arr <- setdiff(colnames(ukb.biochem.df), "eid")
+ukb_wes_all_eid <- eid.ls$Biochem
+ukb.biochem.df.chip <- chip_mat.phen.df |> filter(eid %in% ukb_wes_all_eid)
+
+
+library(limma)
+var.arr <- c("Age", "Sex", "Smoking","BMI","pc1","pc2","pc3","pc4","pc5","pc6","pc7","pc8","pc9","pc10","statin","antidiabetic","antithrombotic")
+expr.df <- ukb.biochem.df.chip[complete.cases(ukb.biochem.df.chip[, var.arr]), ]
+design <- model.matrix(reformulate(c("CHIP.all",var.arr)), expr.df)
+expr <- scale(expr.df[,biochem_traits.arr])
+rownames(expr) <- expr.df$eid
+
+fit <- lmFit(t(expr), design)
+fit <- eBayes(fit)
+chip.biochem.limma_df <- topTable(fit, coef="CHIP.all",number = Inf)
+
+limma_metabolic_volcano(limma_df = chip.biochem.limma_df, title = "CH+ vs CH-")
+```
+
+
+## 06. NMR metabolomics
+
+### combind CHIP
+```{r}
+nmr_traits.arr <- setdiff(colnames(ukb_metabolic_df), "eid")
+ukb_wes_all_eid <- eid.ls$NMR
+ukb_metabolic_df.chip <- ukb_metabolic_df |> filter(eid %in% ukb_wes_all_eid) |> left_join(chip_mat.phen.df, by = c("eid"))
+```
+
+### limma diff
+```{r}
+library(limma)
+var.arr <- c("Age", "Sex", "Smoking","BMI","pc1","pc2","pc3","pc4","pc5","pc6","pc7","pc8","pc9","pc10","statin","antidiabetic","antithrombotic")
+expr.df <- ukb_metabolic_df.chip[complete.cases(ukb_metabolic_df.chip[, var.arr]), ]
+
+##########all 
+
+design <- model.matrix(reformulate(c("CHIP.all",var.arr)), expr.df)
+expr <- scale(expr.df[,nmr_traits.arr])
+rownames(expr) <- expr.df$eid
+
+fit <- lmFit(t(expr), design)
+fit <- eBayes(fit)
+chip.metabolic.limma_df <- topTable(fit, coef="CHIP.all",number = Inf)
+
+##########percentatge
+meta.per <- colnames(expr.df)[grepl("%",colnames(expr.df))]
+expr.per <- scale(expr.df[,meta.per])
+rownames(expr.per) <- expr.df$eid
+fit <- lmFit(t(expr.per), design)
+fit <- eBayes(fit)
+chip.metabolic.per.limma_df <- topTable(fit, coef="CHIP.all",number = Inf)
+
+########## mmol/l
+meta.mml <- colnames(expr.df)[grepl("mmol/l",colnames(expr.df))]
+expr.mml <- scale(expr.df[,meta.mml])
+rownames(expr.mml) <- expr.df$eid
+fit <- lmFit(t(expr.mml), design)
+fit <- eBayes(fit)
+chip.metabolic.mml.limma_df <- topTable(fit, coef="CHIP.all",number = Inf)
+
+```
+```{r}
+limma_metabolic_volcano(chip.metabolic.limma_df, top =10, title = "CH+ vs CH-")
+limma_metabolic_volcano(chip.metabolic.per.limma_df, top =10, title = "CH+ vs CH-")
+limma_metabolic_volcano(chip.metabolic.mml.limma_df, top =10, title = "CH+ vs CH-")
+
+pdf("chip_f4h.pdf", width = 4, height = 4.2)
+limma_metabolic_volcano(chip.metabolic.mml.limma_df, top =10, title = "CH+ vs CH-")
+dev.off()
+```
+
+
+```{r}
+write.table(chip.bloodcount.limma_df,"chip_suppl_table_limmaCBC.tsv",quote = FALSE, sep = "\t")
+write.table(chip.biochem.limma_df,"chip_suppl_table_limmaBioC.tsv",quote = FALSE, sep = "\t")
+write.table(chip.metabolic.limma_df,"chip_suppl_table_limmanNMR.tsv",quote = FALSE, sep = "\t")
+write.table(olink.lm,"chip_suppl_table_limmaOlink.tsv",quote = FALSE, sep = "\t")
+```
+
+## 07. GWAS
+### QC
+```{r}
+#######input
+ukb.gwas_pheno.df <- read.csv("GWAS_data/ukb.gwas_pheno.csv", na.strings = c("", "NA"))
+ukb.gwas_pheno.df <- ukb.gwas_pheno.df |> 
+  rename_with(~ gsub("participant.","", .x)) |> 
+  rename_with(~ gsub("p22009_a","pc", .x)) |> 
+  rename(sex = p31, age = p21022, ever_smoked = p20160_i0, bmi = p23104_i0,
+         hdl_cholesterol = p30760_i0, ldl_cholesterol = p30780_i0,
+         genetic_sex = p22001, ethnic = p22006, aneuploidy = p22019) |> 
+  select(-c(p22418,p21008,p22021))
+########filter
+ukb.gwas_pheno.df |> count(p22020,ethnic,aneuploidy, sex == genetic_sex)
+ukb.gwas_pheno.df <- ukb.gwas_pheno.df |> filter(sex == genetic_sex) |> filter(ethnic == 1) |>  filter(p22020 == 1) |> filter(is.na(aneuploidy))
+########hypertension
+ukb.gwas_pheno.df <- ukb.gwas_pheno.df |> 
+  mutate( hypertension = as.integer(rowSums(across(all_of(c("p2966_i0","p2966_i1","p2966_i2","p2966_i3")), ~ as.numeric(.)), na.rm = TRUE) > 0) ) |> 
+  select(-c(p2966_i0, p2966_i1, p2966_i2, p2966_i3, p22020, aneuploidy, genetic_sex, ethnic))
+########fill na
+ukb.gwas_pheno.df <- ukb.gwas_pheno.df |>
+  mutate(ever_smoked = if_else(is.na(ever_smoked), 0, ever_smoked)) |> 
+  mutate(across(all_of(c("bmi","hdl_cholesterol","ldl_cholesterol")), ~ if_else(is.na(.),mean(., na.rm = TRUE), .))) 
+
+####### thromb_event 
+ukb.gwas_pheno.df <- ukb.gwas_pheno.df |> 
+  left_join(ukb.icd10.thromb.df[,c("eid","thromb_group")], by = c("eid") ) |> 
+  rename(thromb_event = thromb_group) |>
+  mutate(thromb_cc = if_else(is.na(thromb_event),0,1))
+
+####### CHIP mut
+ukb.gwas_pheno.df <- ukb.gwas_pheno.df |> inner_join(chip_mat.phen.df[,c("eid","CHIP.all")], by = c("eid"))
+ukb.gwas_pheno.df |> count(thromb_cc, CHIP.all)
+```
+```{r}
+ukb_21008.samples <- read.table("GWAS_data/ukb21008_c1_b0_v1.list", sep = "", head = TRUE)
+all(ukb.gwas_pheno.df$eid %in% ukb_21008.samples$ID_2)
+```
+```{r}
+ukb.gwas_pheno.df$IID <- ukb.gwas_pheno.df$eid
+ukb.gwas_pheno.df$FID <- ukb.gwas_pheno.df$eid
+ukb.gwas_pheno.df <- ukb.gwas_pheno.df[,c("FID","IID",colnames(ukb.gwas_pheno.df)[2:21])]
+
+sum(ukb.gwas_pheno.df$CHIP.all)
+sum(ukb.gwas_pheno.df$thromb_cc)
+```
+
+### PheWAS
+#### exsample
+```{r}
+#devtools::install_github("PheWAS/PheWAS")
+library("PheWAS")
+set.seed(1)
+ex=generateExample()
+id.vocab.code.count=ex$id.vocab.code.count
+genotypes=ex$genotypes
+id.sex=ex$id.sex
+
+id.vocab.code.count
+genotypes
+id.sex
+
+phenotypes=createPhenotypes(id.vocab.code.count, 
+  aggregate.fun=sum, id.sex=id.sex)
+data=inner_join(inner_join(phenotypes,genotypes),id.sex)
+
+results=phewas_ext(data,phenotypes=names(phenotypes)[-1],genotypes=c("rsEXAMPLE"),
+  covariates=c("sex"), cores=1)
+
+phewasManhattan(results, title="My Example PheWAS Manhattan Plot")
+```
+#### CHIP
+```{r}
+ukb.gwas_pheno.df <- read.csv("GWAS_data/ukb.gwas_pheno.chip_thromb.tsv", sep = "\t")
+
+id.vocab.code.count <- ukb.icd10.df |> filter(eid %in% ukb.gwas_pheno.df$IID) |> select(eid,ICD10)  |> mutate(vocabulary_id="ICD10", count =1) |> rename(id=eid,code=ICD10) 
+id.vocab.code.count <- id.vocab.code.count[,c("id","vocabulary_id","code","count")]
+id.sex <- ukb.gwas_pheno.df |> select(IID,sex) |> mutate(sex = if_else(sex == 1, "M", "F")) |> rename(id=IID)
+genotypes <- ukb.gwas_pheno.df |> select(IID,CHIP.all) |> rename(id=IID, withCHIP = CHIP.all)
+
+phenotypes = createPhenotypes(id.vocab.code.count, min.code.count=1, add.phecode.exclusions=T, translate=T, vocabulary.map=PheWAS::phecode_map_icd10, id.sex = id.sex)
+
+covariate <- ukb.gwas_pheno.df |> rename(id=IID) |>
+  select(- c(FID,hdl_cholesterol,ldl_cholesterol,
+             hypertension,hypertension,thromb_event,thromb_cc,CHIP.all))
+
+results=phewas(phenotypes, genotypes, cores = 10, 
+               significance.threshold = c('p-value', 'bonferroni', 'fdr'),
+               covariates = covariate, additive.genotypes = FALSE)
+```
+```{r}
+library("PheWAS")
+load("GWAS_data/PheWAS.RData")
+
+results <- results |> mutate(p = if_else( p< 1e-35 & !is.na(p),1e-35,p))
+phewasManhattan(results, title="CHIPmut PheWAS Manhattan Plot")
+
+results_d <- addPhecodeInfo(results)
+res = results_d[results_d$bonferroni & !is.na(results_d$p),]
+
+```
+
+## 08.Combind
+
+### list
+```{r}
+#CBC Biochem WES Olink NMR
+
+remove_rows_by_na_ratio <- function(df, cols, threshold = 0.8) {
+  # df: data.frame
+  # cols: 指定列范围，比如 2:31，或 c("A", "B", "C")
+  # threshold: NA占比阈值，默认0.8
+  na_ratio <- rowMeans(is.na(df[, cols, drop = FALSE]))
+  df_filtered <- df[na_ratio <= threshold, , drop = FALSE]
+  return(df_filtered)
+}
+
+wes_eids <- as.character(chip_mat.phen.df$eid)
+
+eid.ls <- list()
+eid.ls$WES <- wes_eids
+eid.ls$CBC <- intersect(as.character(remove_rows_by_na_ratio(ukb_blood_count_df, 2:32)$eid), wes_eids)
+eid.ls$Biochem <- intersect(as.character(remove_rows_by_na_ratio(ukb.biochem.df, 2:31)$eid), wes_eids)
+eid.ls$Olink <- intersect(as.character(olink.df$eid), wes_eids)
+eid.ls$NMR <- intersect(as.character(remove_rows_by_na_ratio(ukb_metabolic_df, 2:252)$eid), wes_eids)
+```
+```{r}
+omics_summary <- lapply(names(eid.ls), function(nm) {
+  tmp <- chip_mat.phen.df[chip_mat.phen.df$eid %in% eid.ls[[nm]], ]
+
+  data.frame(
+    Dataset = nm,
+    Total = nrow(tmp),
+    CHIP_pos = sum(tmp$CHIP.all == 1, na.rm = TRUE),
+    CHIP_neg = sum(tmp$CHIP.all == 0, na.rm = TRUE)
+  )
+}) |> 
+  dplyr::bind_rows()
+
+omics_summary
+```
+
+### upset
+```{r}
+library(ComplexHeatmap)
+design.mat <- list_to_matrix(eid.ls)
+design.comb.mat <- make_comb_mat(design.mat)
+
+p_upset <- UpSet(design.comb.mat, 
+      set_order = c("WES","CBC","Biochem","NMR","Olink"),
+      comb_col = c("#5f75ae", "#7ba39d", "#de8e06","#6a3d9a","#A81E2C")[comb_degree(design.comb.mat)],  
+      bg_col = "#F0F0FF", bg_pt_col = "#CCCCFF", 
+      top_annotation = upset_top_annotation(design.comb.mat, add_numbers = TRUE,
+                                            annotation_name_rot = 90),
+      right_annotation = upset_right_annotation(design.comb.mat, add_numbers = TRUE,
+                                                show_annotation_name = FALSE,
+                                                axis_param = list(side = "top"),
+                                                gp = gpar(fill = "#08537C", col = "#08537C")
+                                                )
+      )
+p_upset
+```
+```{r}
+pdf("chip_f4a.pdf", width = 6, height = 3.5)
+p_upset
+dev.off()
+```
+
+```{r}
+chip.olink.limma_df |> filter(adj.P.Val < 0.05)
+chip.bloodcount.limma_df |>  filter(adj.P.Val < 0.05)
+chip.biochem.limma_df |>  filter(adj.P.Val < 0.05)
+chip.metabolic.mml.limma_df |>  filter(adj.P.Val < 0.05)
+```
+### extract data
+```{r}
+combind_eid <- rownames(design.mat)[rowSums(design.mat) == 5]
+combind_dat <- chip_mat.phen.df |> filter(eid %in% combind_eid)
+combind_dat <- combind_dat[,c(1:48,111:113)]
+```
+
+```{r}
+olink_sign <- c(
+  "flt3lg", "kitlg", "csf3",
+  "cd1c", "clec4c", "lamp3", "cd86",
+  "sell", "ccl5",
+  "ceacam8", "clec4d", "cd5l", "ager", "cd36", "cd300lf", "cd209",
+  "angpt1", "vegfc", "axl", "tnfsf12",
+  "il32", "crisp3", "prg3", "lama4", "ccn2", "ddah1", "lpl", "lag3", "gzma", "klrb1"
+)
+
+cbc_sign <- c("PLT_10e9_L","Neutrophils_10e9_L","Monocytes_10e9_L","Eosinophils_10e9_L","Lymphocytes_10e9_L","RBC_10e12_L")
+
+biochem_sign <- c("Cystatin_C(mg/L)","Cholesterol(mmol/L)","LDL_direct(mmol/L)","HDL_cholesterol(mmol/L)","Apolipoprotein_B(g/L)","Apolipoprotein_A(g/L)","C-reactive_protein(mg/L)","Gamma_glutamyltransferase(U/L)","Urate(umol/L)")
+
+nmr_sign <- c("Linoleic Acid (mmol/l)","Omega-6 Fatty Acids (mmol/l)","Polyunsaturated Fatty Acids (mmol/l)","Docosahexaenoic Acid (mmol/l)","LDL Cholesterol (mmol/l)","HDL Cholesterol (mmol/l)","Total Cholesterol (mmol/l)","Acetone (mmol/l)")
+
+length(c(olink_sign,cbc_sign,biochem_sign,nmr_sign))
+```
+
+```{r}
+olink_dat <- olink_wes.df[,c("eid",olink_sign)] |> filter(eid %in% combind_eid)
+nmr_dat <- ukb_metabolic_df.chip[,c("eid",nmr_sign)] |> filter(eid %in% combind_eid)
+cbc_dat <- ukb_blood_count_df.chip[,c("eid",cbc_sign)] |> filter(eid %in% combind_eid)  
+biochem_dat <- ukb.biochem.df.chip[,c("eid",biochem_sign)] |> filter(eid %in% combind_eid) 
+
+combind_dat <- combind_dat |> left_join(olink_dat, by = "eid") 
+combind_dat <- combind_dat |> left_join(nmr_dat, by = "eid")
+combind_dat <- combind_dat |> left_join(cbc_dat, by = "eid")
+combind_dat <- combind_dat |> left_join(biochem_dat, by = "eid")
+```
+
+### scoring
+```{r}
+
+library(dplyr)
+
+winsorize_vec <- function(x, probs = c(0.005, 0.995)) {
+  qs <- quantile(x, probs = probs, na.rm = TRUE)
+  x[x < qs[1]] <- qs[1]
+  x[x > qs[2]] <- qs[2]
+  x
+}
+
+prep_z_matrix <- function(dat, features, log_transform = TRUE, winsor = TRUE, impute_na = TRUE) {
+  features_use <- intersect(features, colnames(dat))
+  
+  if (length(features_use) == 0) {
+    stop("No selected features found in dat.")
+  }
+  
+  missing_features <- setdiff(features, colnames(dat))
+  if (length(missing_features) > 0) {
+    message("Missing features: ", paste(missing_features, collapse = ", "))
+  }
+  
+  mat <- dat[, features_use, drop = FALSE]
+  mat <- as.data.frame(lapply(mat, function(x) as.numeric(as.character(x))))
+  
+  if (log_transform) {
+    mat <- as.data.frame(lapply(mat, function(x) {
+      if (any(x < 0, na.rm = TRUE)) {
+        return(x)
+      } else {
+        return(log1p(x))
+      }
+    }))
+  }
+  
+  if (winsor) {
+    mat <- as.data.frame(lapply(mat, winsorize_vec))
+  }
+  
+  zmat <- as.data.frame(scale(mat))
+  colnames(zmat) <- features_use
+  
+  if (impute_na) {
+    zmat[] <- lapply(zmat, function(x) {
+      x[is.na(x) | is.nan(x) | is.infinite(x)] <- 0
+      x
+    })
+  }
+  
+  return(zmat)
+}
+
+
+get_beta <- function(limma_df, features, beta_col = "logFC") {
+  common <- intersect(features, rownames(limma_df))
+  
+  if (length(common) == 0) {
+    stop("No selected features found in limma_df rownames.")
+  }
+  
+  missing_beta <- setdiff(features, rownames(limma_df))
+  if (length(missing_beta) > 0) {
+    message("Features not found in limma result: ", paste(missing_beta, collapse = ", "))
+  }
+  
+  beta <- limma_df[common, beta_col]
+  names(beta) <- common
+  beta <- beta[!is.na(beta)]
+  beta
+}
+
+calc_beta_score <- function(zmat, beta) {
+  common <- intersect(colnames(zmat), names(beta))
+  
+  if (length(common) == 0) {
+    stop("No common features between zmat and beta.")
+  }
+  
+  zmat_use <- as.matrix(zmat[, common, drop = FALSE])
+  beta_use <- beta[common]
+  
+  score <- as.numeric(zmat_use %*% beta_use) / sum(abs(beta_use))
+  
+  return(score)
+}
+```
+```{r}
+olink_z   <- prep_z_matrix(combind_dat, olink_sign, log_transform = FALSE, winsor = TRUE, impute_na = TRUE)
+cbc_z     <- prep_z_matrix(combind_dat, cbc_sign, log_transform = TRUE, winsor = TRUE, impute_na = TRUE)
+biochem_z <- prep_z_matrix(combind_dat, biochem_sign, log_transform = TRUE, winsor = TRUE, impute_na = TRUE)
+nmr_z     <- prep_z_matrix(combind_dat, nmr_sign, log_transform = TRUE, winsor = TRUE,impute_na = TRUE)
+
+beta_olink   <- get_beta(chip.olink.limma_df, olink_sign)
+beta_cbc     <- get_beta(chip.bloodcount.limma_df, cbc_sign)
+beta_biochem <- get_beta(chip.biochem.limma_df, biochem_sign)
+beta_nmr     <- get_beta(chip.metabolic.mml.limma_df, nmr_sign)
+
+combind_dat$score_olink   <- calc_beta_score(olink_z, beta_olink)
+combind_dat$score_cbc     <- calc_beta_score(cbc_z, beta_cbc)
+combind_dat$score_biochem <- calc_beta_score(biochem_z, beta_biochem)
+combind_dat$score_nmr     <- calc_beta_score(nmr_z, beta_nmr)
+```
+
+```{r}
+score_mat <- combind_dat[, c("score_olink", "score_cbc", "score_biochem", "score_nmr")]
+score_mat_z <- as.data.frame(scale(score_mat))
+colnames(score_mat_z) <- c("score_olink_z", "score_cbc_z", "score_biochem_z", "score_nmr_z")
+combind_dat$score_multiomic <- rowMeans(score_mat_z, na.rm = FALSE)
+combind_dat$score_multiomic_z <- as.numeric(scale(combind_dat$score_multiomic))
+combind_dat<- cbind(combind_dat,score_mat_z)
+
+
+combind_dat |> group_by(CHIP.all) |> summarise(median(score_multiomic_z),mean(score_multiomic_z))
+```
+
+
+```{r}
+combind_dat |> ggplot(aes(x=as.factor(CHIP.all),y = score_olink)) + geom_boxplot()
+combind_dat |> ggplot(aes(x=as.factor(CHIP.all),y = score_cbc)) + geom_boxplot()
+combind_dat |> ggplot(aes(x=as.factor(CHIP.all),y = score_biochem)) + geom_boxplot()
+combind_dat |> ggplot(aes(x=as.factor(CHIP.all),y = score_multiomic)) + geom_boxplot()
+```
+### heatmap
+```{r}
+feature_module_df <- dplyr::bind_rows(
+  data.frame(feature = cbc_sign,     module = "CBC"),
+  data.frame(feature = olink_sign,   module = "Olink"),
+  data.frame(feature = biochem_sign, module = "Biochem"),
+  data.frame(feature = nmr_sign,     module = "NMR")
+)
+
+feature_module_df$feature <- as.character(feature_module_df$feature)
+feature_module_df$module <- factor(
+  feature_module_df$module,
+  levels = c("CBC", "Olink", "Biochem", "NMR")
+)
+
+
+feature_z <- cbind(
+  cbc_z[, intersect(cbc_sign, colnames(cbc_z)), drop = FALSE],
+  olink_z[, intersect(olink_sign, colnames(olink_z)), drop = FALSE],
+  biochem_z[, intersect(biochem_sign, colnames(biochem_z)), drop = FALSE],
+  nmr_z[, intersect(nmr_sign, colnames(nmr_z)), drop = FALSE]
+)
+
+feature_z <- as.data.frame(feature_z)
+feature_z$eid <- combind_dat$eid
+
+```
+
+```{r}
+get_beta_df <- function(limma_df, features, module, beta_col = "logFC") {
+  common <- intersect(features, rownames(limma_df))
+  
+  data.frame(
+    feature = common,
+    beta = limma_df[common, beta_col],
+    module = module,
+    stringsAsFactors = FALSE
+  )
+}
+
+beta_df <- dplyr::bind_rows(
+  get_beta_df(chip.bloodcount.limma_df, cbc_sign, "CBC"),
+  get_beta_df(chip.olink.limma_df, olink_sign, "Olink"),
+  get_beta_df(chip.biochem.limma_df, biochem_sign, "Biochem"),
+  get_beta_df(chip.metabolic.mml.limma_df, nmr_sign, "NMR")
+)
+```
+
+```{r}
+row_anno_df <- feature_module_df |>
+  dplyr::left_join(beta_df |> dplyr::select(feature, beta), by = "feature")
+
+row_anno_df <- row_anno_df |>
+  dplyr::arrange(module, dplyr::desc(beta))
+
+feature_order <- row_anno_df$feature
+```
+
+```{r}
+set.seed(123)
+
+idx_chip_neg <- which(combind_dat$CHIP.all == 0)
+idx_chip_pos <- which(combind_dat$CHIP.all == 1)
+
+idx_use <- c(
+  sample(idx_chip_neg, min(4000, length(idx_chip_neg))),
+  sample(idx_chip_pos, min(1000, length(idx_chip_pos)))
+)
+
+dat_hm <- combind_dat[idx_use, ]
+mat_hm <- feature_z[idx_use, feature_order, drop = FALSE]
+```
+
+```{r}
+mat_hm <- t(as.matrix(mat_hm))
+mat_hm[mat_hm > 2] <- 2
+mat_hm[mat_hm < -2] <- -2
+sample_order <- order(
+  dat_hm$CHIP.all,
+  dat_hm$score_multiomic_z
+)
+
+dat_hm <- dat_hm[sample_order, ]
+mat_hm <- mat_hm[, sample_order, drop = FALSE]
+```
+
+```{r}
+library(ComplexHeatmap)
+library(circlize)
+library(grid)
+
+row_anno_plot <- row_anno_df |>
+  dplyr::filter(feature %in% rownames(mat_hm)) |>
+  dplyr::distinct(feature, module, beta)
+
+row_anno_plot <- row_anno_plot[match(rownames(mat_hm), row_anno_plot$feature), ]
+
+row_ha <- rowAnnotation(
+  Module = row_anno_plot$module,
+  `CHIP β` = anno_barplot(
+    row_anno_plot$beta,
+    gp = gpar(fill = ifelse(row_anno_plot$beta >= 0, "#A81E2C", "#3C5488")),
+    border = FALSE,
+    width = unit(1.5, "cm")
+  ),
+  col = list(
+    Module = c(
+      CBC = "#0098C9",
+      Olink = "#E64B35",
+      Biochem = "#cab2d6",
+      NMR = "#00A087"
+    )
+  )
+)
+
+library(zoo)
+
+score_line <- zoo::rollmean(
+  dat_hm$score_multiomic_z,
+  k = 25,
+  fill = NA,
+  align = "center"
+)
+
+score_group_mean <- ave(
+  dat_hm$score_multiomic_z,
+  dat_hm$CHIP.all,
+  FUN = function(x) mean(x, na.rm = TRUE)
+)
+
+top_ha <- HeatmapAnnotation(
+  CHIP = factor(dat_hm$CHIP.all, levels = c(0, 1), labels = c("CHIP-", "CHIP+")),
+  Score = anno_lines(
+    score_line,
+    gp = gpar(col = "black", lwd = 1),
+    ylim = range(dat_hm$score_multiomic_z, na.rm = TRUE),
+    height = unit(1.2, "cm")
+  ),
+  col = list(
+    CHIP = c("CHIP-" = "#727d94", "CHIP+" = "#bb216f")
+  ),
+  annotation_name_side = "left"
+)
+
+col_fun <- colorRamp2(
+  c(-2, 0, 2),
+  c("#3C5488", "white", "#A81E2C")
+)
+
+#pdf("chip_f5a.pdf", width = 10, height = 7)
+Heatmap(
+  mat_hm,
+  name = "Z-score",
+  col = col_fun,
+  top_annotation = top_ha,
+  left_annotation = row_ha,
+  row_split = row_anno_plot$module,
+  column_split = factor(dat_hm$CHIP.all, levels = c(0, 1), labels = c("CHIP-", "CHIP+")),
+  cluster_rows = FALSE,
+  cluster_columns = FALSE,
+  show_column_names = FALSE,
+  show_row_names = TRUE,
+  row_names_gp = gpar(fontsize = 4),
+  column_title = NULL,
+  heatmap_legend_param = list(
+    title = "Feature\nz-score",
+    legend_height = unit(4, "cm")
+  )
+)
+#dev.off()
+
+
+```
+
+```{r}
+row_anno_export <- row_anno_plot |>
+  mutate(
+    feature = if_else(module == "Olink", toupper(feature), feature),
+    Direction = if_else(beta > 0, "Higher in CHIP", "Lower in CHIP")
+  ) |>
+  rename(
+    `Feature ID` = feature,
+    `Data layer` = module,
+    `CHIP-associated beta / score weight` = beta
+  )
+
+row_anno_export
+
+write.table(row_anno_export,"chip_suppl_table_mlscore.tsv",row.names = FALSE, sep = "\t", quote = FALSE)
+```
+
+### multi score
+```{r}
+var.arr <- c("Age", "Sex", "Smoking","BMI","pc1","pc2","pc3","pc4","pc5","pc6","pc7","pc8","pc9","pc10","statin","antidiabetic","antithrombotic")
+
+score_cols <- c(
+  "score_cbc_z",
+  "score_olink_z",
+  "score_biochem_z",
+  "score_nmr_z",
+  "score_multiomic_z"
+)
+
+get_score_beta <- function(score_col, dat, covar,event) {
+  
+  form <- reformulate(
+    termlabels = c(event, covar),
+    response = score_col
+  )
+  
+  fit <- lm(form, data = dat)
+  
+  broom::tidy(fit, conf.int = TRUE) |>
+    dplyr::filter(term == event) |>
+    dplyr::mutate(score = score_col)
+}
+
+
+score_beta_df <- dplyr::bind_rows(
+  lapply(score_cols, get_score_beta, dat = combind_dat, covar = var.arr, event = "CHIP.all")
+)
+score_beta_df2 <- dplyr::bind_rows(
+  lapply(score_cols, get_score_beta, dat = combind_dat, covar = var.arr, event = "thromb")
+)
+
+score_beta_df <- rbind(score_beta_df, score_beta_df2)
+
+score_beta_df$score <- dplyr::recode(
+  score_beta_df$score,
+  score_cbc_z = "CBC",
+  score_olink_z = "Olink",
+  score_biochem_z = "Biochem",
+  score_nmr_z = "NMR",
+  score_multiomic_z = "Integrated"
+)
+
+score_beta_df$score <- factor(score_beta_df$score, levels = rev(c("Integrated","Olink","CBC","Biochem","NMR")))
+
+p_f5_1 <- ggplot(score_beta_df, aes(x = estimate, y = score)) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high), height = 0.15) +
+  geom_point(size = 2.5) +
+  theme_classic() +labs( x = "Adjusted β", y = NULL) +
+  facet_wrap(~term )
+p_f5_1
+```
+
+### driver-specific
+```{r}
+combind_dat <- combind_dat |> mutate(
+  driver_group = case_when(
+    CHIP.all == 0 ~ "CHIP-",
+    DNMT3A.all == 1 ~ "DNMT3A",
+    TET2.all == 1 ~ "TET2",
+    ASXL1.all == 1 ~"ASXL1",
+    PPM1D.all == 1 ~ "PPM1D",
+    CHIP.all == 1 ~ "Others",
+    TRUE ~ NA_character_
+  ),
+  thrombosis = case_when(
+    thromb == 0 ~ "Thromb-",
+    VTE == 1 ~ "VTE",
+    ATE == 1 ~ "ATE",
+    TRUE ~ NA_character_
+  ),
+  vaf_group = case_when(
+    CHIP.all == 0 ~ "CHIP-",
+    CHIP.sma == 1 ~ "Small_clone",
+    CHIP.lar == 1 ~ "Large_clone",
+    TRUE ~ NA_character_
+  ),
+  score_q = ntile(score_multiomic_z, 4),
+  score_q = factor(score_q,levels = 1:4,labels = c("Q1", "Q2", "Q3", "Q4"))
+)
+
+combind_dat$driver_group <- factor(combind_dat$driver_group,levels = c("CHIP-", "DNMT3A", "TET2", "ASXL1", "PPM1D",  "Others"))
+combind_dat$thrombosis <- factor(combind_dat$thrombosis,levels = c("Thromb-", "VTE", "ATE"))
+```
+```{r}
+  event <- "score_multiomic_z"
+  var.arr <- c("Age", "Sex", "Smoking","BMI","pc1","pc2","pc3","pc4","pc5","pc6","pc7","pc8","pc9","pc10","statin","antidiabetic","antithrombotic")
+  
+  fit <- lm(reformulate(c("driver_group",var.arr), response = event), data = combind_dat)
+  driver_score_df <- broom::tidy(fit, conf.int = TRUE) |>
+  dplyr::filter(grepl("^driver_group", term)) |>
+  dplyr::mutate(
+    driver = gsub("^driver_group", "", term),
+    driver = factor(driver, levels = c("DNMT3A", "TET2", "ASXL1", "PPM1D", "Others"))
+  )
+
+p_f5_2 <- ggplot(driver_score_df, aes(x = estimate, y = driver)) +
+  geom_vline(xintercept = 0, linetype = "dashed", linewidth = 0.5) +
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high), height = 0.18, linewidth = 0.7) +
+  geom_point(size = 2.6) +
+  theme_classic(base_size = 13) +
+  labs(
+    x = "Adjusted β for integrated multi-omic score",
+    y = NULL
+  )
+p_f5_2 
+```
+```{r}
+  event <- "score_multiomic_z"
+  var.arr <- c("Age", "Sex", "Smoking","BMI","pc1","pc2","pc3","pc4","pc5","pc6","pc7","pc8","pc9","pc10","statin","antidiabetic","antithrombotic")
+  
+  fit <- lm(reformulate(c("vaf_group",var.arr), response = event), data = combind_dat)
+  driver_score_df <- broom::tidy(fit, conf.int = TRUE) |>
+  dplyr::filter(grepl("^vaf_group", term)) |>
+  dplyr::mutate(
+    vaf = gsub("^vaf_group", "", term)
+  )
+
+ggplot(driver_score_df, aes(x = estimate, y = vaf)) +
+  geom_vline(xintercept = 0, linetype = "dashed", linewidth = 0.5) +
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high), height = 0.18, linewidth = 0.7) +
+  geom_point(size = 2.6) +
+  theme_classic(base_size = 13) +
+  labs(
+    x = "Adjusted β for integrated multi-omic score",
+    y = NULL
+  )
+
+driver_score_df
+```
+
+```{r}
+fit_thromb_q <- glm(
+  reformulate(c("score_q", var.arr), response = "thromb"),
+  data = combind_dat,
+  family = binomial()
+)
+
+thromb_q_df <- broom::tidy(fit_thromb_q, conf.int = TRUE, exponentiate = TRUE) |>
+  filter(grepl("^score_q", term)) |>
+  mutate(
+    group = gsub("score_q", "", term),
+    group = factor(group, levels = c("Q2", "Q3", "Q4"))
+  )
+
+thromb_q_df
+```
+
+
+### score quantile
+```{r}
+library(dplyr)
+library(ggplot2)
+library(broom)
+library(forcats)
+
+dat_thromb <- combind_dat |>
+  mutate(
+    CHIP.all = as.integer(CHIP.all),
+    thromb = as.integer(thromb),
+    score_multiomic_z = as.numeric(score_multiomic_z)
+  ) |>
+  filter(
+    !is.na(thromb),
+    !is.na(CHIP.all),
+    !is.na(score_multiomic_z)
+  )
+
+# 确认 thromb 是 0/1
+table(dat_thromb$thromb, useNA = "ifany")
+table(dat_thromb$CHIP.all, useNA = "ifany")
+summary(dat_thromb$score_multiomic_z)
+
+dat_thromb <- dat_thromb |>
+  mutate(
+    Sex = as.factor(Sex),
+    Smoking = as.factor(Smoking)
+  )
+
+dat_thromb <- dat_thromb |>
+  mutate(
+    score_q = ntile(score_multiomic_z, 4),
+    score_q = factor(
+      score_q,
+      levels = 1:4,
+      labels = c("Q1", "Q2", "Q3", "Q4")
+    )
+  )
+
+table(dat_thromb$score_q, dat_thromb$thromb)
+
+fit_thromb_q <- glm(
+  reformulate(c("score_q", var.arr), response = "thromb"),
+  data = dat_thromb,
+  family = binomial()
+)
+
+thromb_q_df <- broom::tidy(fit_thromb_q, conf.int = TRUE, exponentiate = TRUE) |>
+  filter(grepl("^score_q", term)) |>
+  mutate(
+    group = gsub("score_q", "", term),
+    group = factor(group, levels = c("Q2", "Q3", "Q4"))
+  )
+
+thromb_q_df
+
+thromb_q_plot <- bind_rows(
+  data.frame(
+    term = "score_qQ1",
+    estimate = 1,
+    conf.low = 1,
+    conf.high = 1,
+    p.value = NA_real_,
+    group = factor("Q1", levels = c("Q1", "Q2", "Q3", "Q4"))
+  ),
+  thromb_q_df |>
+    mutate(group = factor(as.character(group), levels = c("Q1", "Q2", "Q3", "Q4")))
+)
+
+
+dat_thromb <- dat_thromb |>
+  mutate(score_q_num = as.numeric(score_q))
+
+fit_thromb_trend <- glm(
+  reformulate(c("score_q_num", var.arr), response = "thromb"),
+  data = dat_thromb,
+  family = binomial()
+)
+
+trend_p <- broom::tidy(fit_thromb_trend, conf.int = TRUE, exponentiate = TRUE) |>
+  filter(term == "score_q_num")
+
+trend_p
+
+p5E <- ggplot(thromb_q_plot, aes(x = estimate, y = group)) +
+  geom_vline(xintercept = 1, linetype = "dashed", linewidth = 0.5) +
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high), height = 0.18, linewidth = 0.7) +
+  geom_point(size = 2.6) +
+  scale_x_log10() +
+  theme_classic(base_size = 13) +
+  labs(
+    x = "Adjusted OR for thromb",
+    y = "Multi-omic score quartile"
+  ) +
+  annotate(
+    "text",
+    x = max(thromb_q_plot$conf.high, na.rm = TRUE),
+    y = 1,
+    hjust = 1,
+    label = paste0("P trend = ", signif(trend_p$p.value, 3)),
+    size = 4
+  )
+
+p5E
+
+
+```
+### CHIP + score
+```{r}
+q_score <- quantile(dat_thromb$score_multiomic_z, probs = c(1/3, 2/3), na.rm = TRUE)
+
+dat_joint <- dat_thromb |>
+  mutate(
+    score_tertile = case_when(
+      score_multiomic_z <= q_score[1] ~ "Low score",
+      score_multiomic_z >= q_score[2] ~ "High score",
+      TRUE ~ "Middle score"
+    )
+  ) |>
+  filter(score_tertile != "Middle score") |>
+  mutate(
+    chip_score_group = case_when(
+      CHIP.all == 0 & score_tertile == "Low score"  ~ "CHIP- / Low score",
+      CHIP.all == 0 & score_tertile == "High score" ~ "CHIP- / High score",
+      CHIP.all == 1 & score_tertile == "Low score"  ~ "CHIP+ / Low score",
+      CHIP.all == 1 & score_tertile == "High score" ~ "CHIP+ / High score",
+      TRUE ~ NA_character_
+    ),
+    chip_score_group = factor(
+      chip_score_group,
+      levels = c(
+        "CHIP- / Low score",
+        "CHIP- / High score",
+        "CHIP+ / Low score",
+        "CHIP+ / High score"
+      )
+    )
+  ) |>
+  filter(!is.na(chip_score_group))
+
+table(dat_joint$chip_score_group, dat_joint$thromb)
+
+
+fit_joint_thromb <- glm(
+  reformulate(c("chip_score_group", var.arr), response = "thromb"),
+  data = dat_joint,
+  family = binomial()
+)
+
+joint_df <- broom::tidy(fit_joint_thromb, conf.int = TRUE, exponentiate = TRUE) |>
+  filter(grepl("^chip_score_group", term)) |>
+  mutate(
+    group = gsub("^chip_score_group", "", term),
+    group = factor(
+      group,
+      levels = c(
+        "CHIP- / High score",
+        "CHIP+ / Low score",
+        "CHIP+ / High score"
+      )
+    )
+  )
+
+joint_plot <- bind_rows(
+  data.frame(
+    term = "Reference",
+    estimate = 1,
+    conf.low = 1,
+    conf.high = 1,
+    p.value = NA_real_,
+    group = factor(
+      "CHIP- / Low score",
+      levels = c(
+        "CHIP- / Low score",
+        "CHIP- / High score",
+        "CHIP+ / Low score",
+        "CHIP+ / High score"
+      )
+    )
+  ),
+  joint_df |>
+    mutate(
+      group = factor(
+        as.character(group),
+        levels = c(
+          "CHIP- / Low score",
+          "CHIP- / High score",
+          "CHIP+ / Low score",
+          "CHIP+ / High score"
+        )
+      )
+    )
+)
+
+joint_plot
+
+p5F <- ggplot(joint_plot, aes(x = estimate, y = group)) +
+  geom_vline(xintercept = 1, linetype = "dashed", linewidth = 0.5) +
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high), height = 0.18, linewidth = 0.7) +
+  geom_point(size = 2.8) +
+  scale_x_log10() +
+  theme_classic(base_size = 13) +
+  labs(
+    x = "Adjusted OR for thromb",
+    y = NULL
+  )
+
+p5F
+```
+### driver + score
+```{r}
+driver_vars <- c("DNMT3A.all", "TET2.all", "PPM1D.all", "ASXL1.all")
+
+get_driver_thromb <- function(driver_var, dat, var.arr, add_score = FALSE) {
+  
+  terms_use <- c(driver_var, var.arr)
+  if (add_score) {
+    terms_use <- c(driver_var, "score_multiomic_z", var.arr)
+  }
+  
+  fit <- glm(
+    reformulate(terms_use, response = "thromb"),
+    data = dat,
+    family = binomial()
+  )
+  
+  broom::tidy(fit, conf.int = TRUE, exponentiate = TRUE) |>
+    filter(term == driver_var) |>
+    mutate(
+      driver = gsub("\\.all", "", driver_var),
+      model = ifelse(add_score, "Adjusted for score", "Base model"),
+      n = nobs(fit)
+    )
+}
+
+driver_thromb_df <- bind_rows(
+  lapply(driver_vars, get_driver_thromb, dat = dat_thromb, var.arr = var.arr, add_score = FALSE),
+  lapply(driver_vars, get_driver_thromb, dat = dat_thromb, var.arr = var.arr, add_score = TRUE)
+) |>
+  mutate(
+    driver = factor(driver, levels = c("DNMT3A", "TET2", "PPM1D", "ASXL1")),
+    model = factor(model, levels = c("Base model", "Adjusted for score"))
+  )
+
+driver_thromb_df
+
+p5G <- ggplot(driver_thromb_df, aes(x = estimate, y = driver, color = model)) +
+  geom_vline(xintercept = 1, linetype = "dashed", linewidth = 0.5) +
+  geom_errorbarh(
+    aes(xmin = conf.low, xmax = conf.high),
+    position = position_dodge(width = 0.55),
+    height = 0.18,
+    linewidth = 0.7
+  ) +
+  geom_point(
+    position = position_dodge(width = 0.55),
+    size = 2.6
+  ) +
+  scale_x_log10() +
+  theme_classic(base_size = 13) +
+  labs(
+    x = "Adjusted OR for thromb",
+    y = NULL,
+    color = NULL
+  )
+
+p5G
+```
+
+
+### score quantile 2
+
+```{r}
+fit_q <- glm(
+  reformulate(c("score_q", var.arr), response = "thromb"),
+  data = dat_thromb,
+  family = binomial()
+)
+
+newdat <- dat_thromb |>
+  summarise(across(all_of(var.arr), ~ {
+    if (is.numeric(.x)) mean(.x, na.rm = TRUE) else levels(as.factor(.x))[1]
+  }))
+
+newdat <- newdat[rep(1, 4), ]
+newdat$score_q <- factor(c("Q1", "Q2", "Q3", "Q4"), levels = c("Q1", "Q2", "Q3", "Q4"))
+
+pred <- predict(fit_q, newdata = newdat, type = "link", se.fit = TRUE)
+
+pred_df <- data.frame(
+  score_q = newdat$score_q,
+  fit = pred$fit,
+  se = pred$se.fit
+) |>
+  mutate(
+    prob = plogis(fit),
+    lower = plogis(fit - 1.96 * se),
+    upper = plogis(fit + 1.96 * se)
+  )
+
+p_f5_3 <- ggplot(pred_df, aes(x = score_q, y = prob * 100, group = 1)) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 2.8) +
+  geom_errorbar(aes(ymin = lower * 100, ymax = upper * 100), width = 0.12) +
+  theme_classic(base_size = 13) +
+  labs(
+    x = "Integrated multi-omic score quartile",
+    y = "Predicted thrombosis probability (%)"
+  ) + 
+  annotate(
+    "text",
+    x = 3.4,
+    y = max(pred_df$upper * 100, na.rm = TRUE),
+    label = paste0("P trend = ", trend_p$p.value),
+    hjust = 0,
+    size = 4
+  )
+p_f5_3
+```
+
+```{r}
+library(dplyr)
+library(purrr)
+library(boot)
+
+get_marginal_prob <- function(q_level, fit, dat) {
+  newdat <- dat
+  newdat$score_q <- factor(q_level,levels = c("Q1", "Q2", "Q3", "Q4"))
+  pred_prob <- predict(fit,newdata = newdat,type = "response")
+  tibble(score_q = q_level,prob = mean(pred_prob, na.rm = TRUE))
+}
+
+pred_marginal <- map_dfr(c("Q1", "Q2", "Q3", "Q4"),get_marginal_prob,fit = fit_q,dat = dat_thromb)
+
+pred_marginal
+
+set.seed(123)
+
+boot_marginal <- function(dat, indices, var.arr) {
+  d <- dat[indices, , drop = FALSE]
+  fit <- glm(reformulate(c("score_q", var.arr), response = "thromb"),data = d,family = binomial())
+  out <- map_dfr(c("Q1", "Q2", "Q3", "Q4"), function(q_level) {
+    newdat <- d
+    newdat$score_q <- factor(q_level,levels = c("Q1", "Q2", "Q3", "Q4"))
+    tibble(score_q = q_level,prob = mean(predict(fit, newdata = newdat, type = "response"), na.rm = TRUE))
+  })
+  out$prob
+}
+
+boot_res <- boot(data = dat_thromb,statistic = function(data, indices) {boot_marginal(data, indices, var.arr)},R = 1000)
+
+pred_marginal_ci <- pred_marginal |> mutate(
+    lower = apply(boot_res$t, 2, quantile, probs = 0.025, na.rm = TRUE),
+    upper = apply(boot_res$t, 2, quantile, probs = 0.975, na.rm = TRUE)
+  )
+
+pred_marginal_ci
+
+p_f5_3_marginal <- ggplot(pred_marginal_ci,aes(x = score_q, y = prob * 100, group = 1)) +
+  geom_line(linewidth = 0.8) + geom_point(size = 2.8) +
+  geom_errorbar(aes(ymin = lower * 100, ymax = upper * 100),width = 0.12) +
+  theme_classic(base_size = 13) +
+  labs(x = "Multi-layer score quartile",y = "Adjusted thrombosis risk (%)") +
+  annotate("text",x = 3.25,y = max(pred_marginal_ci$upper * 100, na.rm = TRUE),
+           label = "P for trend = 2.43e-6",hjust = 0,size = 4
+  )
+
+pdf("chip_f5c.pdf",width = 5, height =5)
+p_f5_3_marginal
+dev.off()
+```
+
+```{r}
+dat_thromb$vaf_group <- factor(dat_thromb$vaf_group, levels = rev(c("CHIP-","Small_clone","Large_clone")))
+p_f5_4 <- ggplot(dat_thromb, aes(x = vaf_group, y = score_multiomic_z)) +
+  geom_violin(fill = "grey90", color = NA, width = 0.9) +
+  geom_boxplot(width = 0.18, outlier.shape = NA, fill = "white") +
+  theme_classic(base_size = 13) +
+  labs(x = NULL,y = "Integrated multi-omic score") +
+  stat_compare_means(method = "wilcox.test",paired = FALSE, label = "p.signif",
+                     comparisons=list(c("Small_clone", "CHIP-"),c("Large_clone", "CHIP-")))
+p_f5_4
+
+
+ggplot(dat_thromb, aes(x = driver_group, y = score_multiomic_z)) +
+  geom_violin(fill = "grey90", color = NA, width = 0.9) +
+  geom_boxplot(width = 0.18, outlier.shape = NA, fill = "white") +
+  theme_classic(base_size = 13) +
+  labs(
+    x = NULL,
+    y = "Integrated multi-omic score"
+  )
+```
+
+```{r}
+library(ggalluvial)
+
+flow_df <- dat_joint |>
+  count(chip_score_group, thromb)
+
+ggplot(flow_df,
+       aes(axis1 = chip_score_group, axis2 = factor(thromb), y = n)) +
+  geom_alluvium(aes(fill = chip_score_group), width = 1/12, alpha = 0.7) +
+  geom_stratum(width = 1/12, fill = "grey90", color = "grey40") +
+  geom_text(stat = "stratum", aes(label = after_stat(stratum))) +
+  theme_void()
+```
+```{r}
+library(dplyr)
+library(ggplot2)
+library(ggalluvial)
+library(scales)
+
+flow_df_prop <- dat_joint |>
+  count(chip_score_group, thromb) |>
+  group_by(chip_score_group) |>
+  mutate(
+    total = sum(n),
+    prop = n / total,
+    label_prop = paste0(round(prop * 100, 1), "%")
+  ) |>
+  ungroup() |>
+  mutate(
+    thromb = factor(
+      thromb,
+      levels = c(0, 1),
+      labels = c("No thrombosis", "Thrombosis")
+    ),
+    chip_score_group = factor(
+      chip_score_group,
+      levels = c(
+        "CHIP- / Low score",
+        "CHIP- / High score",
+        "CHIP+ / Low score",
+        "CHIP+ / High score"
+      )
+    )
+  )
+
+p_f5_5 <- ggplot(
+  flow_df_prop,
+  aes(
+    axis1 = chip_score_group,
+    axis2 = thromb,
+    y = prop
+  )
+) +
+  geom_alluvium(
+    aes(fill = chip_score_group),
+    width = 1/12,
+    alpha = 0.75
+  ) +
+  geom_stratum(
+    width = 1/12,
+    fill = "grey90",
+    color = "grey40"
+  ) +
+  geom_text(
+    stat = "stratum",
+    aes(label = after_stat(stratum)),
+    size = 4
+  ) +
+  scale_y_continuous(labels = percent_format(accuracy = 1)) +
+  labs(
+    y = "Within-group proportion",
+    fill = NULL
+  ) +
+  theme_void() +
+  theme(
+    legend.position = "right"
+  )
+
+p_f5_5
+
+ggplot(flow_df_prop, aes(x = chip_score_group, y = prop, fill = thromb)) +
+  geom_col(width = 0.7, color = "white") +
+  geom_text(
+    aes(label = label_prop),
+    position = position_stack(vjust = 0.5),
+    size = 4
+  ) +
+  scale_y_continuous(labels = percent_format(accuracy = 1)) +
+  labs(
+    x = NULL,
+    y = "Within-group proportion",
+    fill = NULL
+  ) +
+  theme_classic(base_size = 13) +
+  theme(
+    axis.text.x = element_text(angle = 35, hjust = 1)
+  )
+
+event_rate_joint <- dat_joint |>
+  group_by(chip_score_group) |>
+  summarise(
+    n = n(),
+    events = sum(thromb == 1, na.rm = TRUE),
+    event_rate = events / n,
+    se = sqrt(event_rate * (1 - event_rate) / n),
+    lower = event_rate - 1.96 * se,
+    upper = event_rate + 1.96 * se,
+    .groups = "drop"
+  ) |>
+  mutate(
+    chip_score_group = factor(
+      chip_score_group,
+      levels = c(
+        "CHIP- / Low score",
+        "CHIP- / High score",
+        "CHIP+ / Low score",
+        "CHIP+ / High score"
+      )
+    )
+  )
+
+p_f5_6 <- ggplot(event_rate_joint, aes(x = chip_score_group, y = event_rate * 100)) +
+  geom_col(width = 0.65, fill = "grey75", color = "black") +
+  geom_errorbar(
+    aes(ymin = lower * 100, ymax = upper * 100),
+    width = 0.15
+  ) +
+  theme_classic(base_size = 13) +
+  labs(
+    x = NULL,
+    y = "Thrombotic event rate (%)"
+  ) +
+  theme(
+    axis.text.x = element_text(angle = 35, hjust = 1)
+  )
+p_f5_6
+```
+
+
+```{r}
+pdf("chip_f5b.pdf",width = 6, height = 6)
+p_f5_1
+p_f5_2
+p_f5_3
+p_f5_4
+p_f5_5
+p_f5_6
+dev.off()
+
+```
+
+
+### score + medicine
+```{r}
+dat_med <- combind_dat |>
+  mutate(
+    CHIP_status = ifelse(CHIP.all == 1, "CHIP+", "CHIP-"),
+    score_group = ifelse(
+      score_multiomic_z >= median(score_multiomic_z, na.rm = TRUE),
+      "High score", "Low score"
+    ),
+    chip_score_group = paste(CHIP_status, score_group, sep = " / "),
+    chip_score_group = factor(
+      chip_score_group,
+      levels = c(
+        "CHIP- / Low score",
+        "CHIP+ / Low score",
+        "CHIP- / High score",
+        "CHIP+ / High score"
+      )
+    )
+  )
+```
+
+
+```{r}
+meds <- c("statin", "antidiabetic", "antithrombotic")
+
+med_prop_df <- dat_med |>
+  select(chip_score_group, all_of(meds)) |>
+  tidyr::pivot_longer(
+    cols = all_of(meds),
+    names_to = "Medication",
+    values_to = "Use"
+  ) |>
+  group_by(chip_score_group, Medication) |>
+  summarise(
+    n = n(),
+    users = sum(Use == 1, na.rm = TRUE),
+    prop = users / n,
+    .groups = "drop"
+  )
+```
+
+```{r}
+p_5_b2_1 <- med_prop_df |>
+  mutate(
+    Medication = recode(
+      Medication,
+      statin = "Statin",
+      antidiabetic = "Antidiabetic",
+      antithrombotic = "Antithrombotic"
+    )
+  ) |>
+  ggplot(aes(x = chip_score_group, y = prop, fill = Medication)) +
+  geom_col(position = position_dodge(width = 0.75), width = 0.65) +
+  scale_y_continuous(labels = scales::percent_format()) +
+  theme_test() +
+  labs(
+    x = NULL,
+    y = "Medication use (%)",
+    fill = NULL
+  ) +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+p_5_b2_1
+```
+```{r}
+covars_base <- c(
+  "Age", "Sex", "Smoking", "BMI",
+  paste0("pc", 1:10)
+)
+
+med_covars <- c("statin", "antidiabetic", "antithrombotic")
+
+run_group_model_compare <- function(outcome, data = dat_med) {
+  
+  fml_base <- as.formula(
+    paste0(
+      outcome, " ~ chip_score_group + ",
+      paste(covars_base, collapse = " + ")
+    )
+  )
+  
+  fml_med <- as.formula(
+    paste0(
+      outcome, " ~ chip_score_group + ",
+      paste(c(covars_base, med_covars), collapse = " + ")
+    )
+  )
+  
+  fit_base <- glm(fml_base, data = data, family = binomial())
+  fit_med  <- glm(fml_med,  data = data, family = binomial())
+  
+  bind_rows(
+    broom::tidy(fit_base, conf.int = TRUE, exponentiate = TRUE) |>
+      filter(grepl("^chip_score_group", term)) |>
+      mutate(model = "Base model"),
+    
+    broom::tidy(fit_med, conf.int = TRUE, exponentiate = TRUE) |>
+      filter(grepl("^chip_score_group", term)) |>
+      mutate(model = "Medication-adjusted model")
+  ) |>
+    mutate(outcome = outcome)
+}
+
+group_compare_df <- purrr::map_dfr(
+  c("thromb", "VTE", "ATE"),
+  run_group_model_compare
+)
+```
+
+```{r}
+group_compare_df <- group_compare_df |>
+  mutate(
+    outcome = recode(
+      outcome,
+      thromb = "Thrombosis",
+      VTE = "VTE",
+      ATE = "ATE"
+    ),
+    group = gsub("^chip_score_group", "", term),
+    group = factor(
+      group,
+      levels = c(
+        "CHIP+ / Low score",
+        "CHIP- / High score",
+        "CHIP+ / High score"
+      )
+    ),
+    model = factor(model, levels = c("Base model", "Medication-adjusted model"))
+  )
+```
+
+```{r}
+group_compare_df |>
+  ggplot(aes(x = estimate, y = group, color = model)) +
+  geom_vline(xintercept = 1, linetype = "dashed") +
+  geom_point(position = position_dodge(width = 0.5), size = 2.5) +
+  geom_errorbarh(
+    aes(xmin = conf.low, xmax = conf.high),
+    position = position_dodge(width = 0.5),
+    height = 0.2
+  ) +
+  facet_wrap(~ outcome, nrow = 1) +
+  scale_x_log10() +
+  theme_test() +
+  labs(
+    x = "Adjusted OR versus CHIP- / Low score",
+    y = NULL,
+    color = NULL
+  )
+
+```
+```{r}
+attenuation_group_df <- group_compare_df |>
+  select(outcome, group, model, estimate) |>
+  tidyr::pivot_wider(names_from = model, values_from = estimate) |>
+  mutate(
+    attenuation_percent =
+      (`Base model` - `Medication-adjusted model`) /
+      (`Base model` - 1) * 100
+  )
+
+attenuation_group_df
+```
+```{r}
+filter(attenuation_group_df, group == "CHIP+ / High score")
+```
+```{r}
+library(ggeffects)
+
+fit_statin <- glm(
+  thromb ~ chip_score_group * statin +
+    Age + Sex + Smoking + BMI +
+    pc1 + pc2 + pc3 + pc4 + pc5 + pc6 + pc7 + pc8 + pc9 + pc10 +
+    antidiabetic + antithrombotic,
+  data = dat_med,
+  family = binomial()
+)
+
+pred_statin <- ggpredict(fit_statin, terms = c("chip_score_group", "statin"))
+```
+
+```{r}
+plot_med_pred <- function(med, outcome = "thromb", data = dat_med) {
+  
+  other_meds <- setdiff(med_covars, med)
+  
+  fml <- as.formula(
+    paste0(
+      outcome, " ~ chip_score_group * ", med, " + ",
+      paste(c(covars_base, other_meds), collapse = " + ")
+    )
+  )
+  
+  fit <- glm(fml, data = data, family = binomial())
+  
+  ggpredict(fit, terms = c("chip_score_group", med)) |>
+    as.data.frame() |>
+    mutate(
+      Medication = med,
+      Med_status = ifelse(group == "1", "User", "Non-user")
+    )
+}
+
+pred_med_group_df <- purrr::map_dfr(meds, plot_med_pred)
+```
+```{r}
+p_5_b2_2 <- pred_med_group_df |>
+  mutate(
+    Medication = recode(
+      Medication,
+      statin = "Statin",
+      antidiabetic = "Antidiabetic",
+      antithrombotic = "Antithrombotic"
+    )
+  ) |>
+  ggplot(aes(x = x, y = predicted, color = Med_status, group = Med_status)) +
+  geom_point(position = position_dodge(width = 0.35), size = 2.5) +
+  geom_errorbar(
+    aes(ymin = conf.low, ymax = conf.high),
+    position = position_dodge(width = 0.35),
+    width = 0.15
+  ) +
+  geom_line(position = position_dodge(width = 0.35), linewidth = 0.7) +
+  facet_wrap(~ Medication) +
+  theme_test() +
+  labs(
+    x = NULL,
+    y = "Adjusted predicted probability of thrombosis",
+    color = NULL
+  ) +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+p_5_b2_2
+```
+
+
+
+```{r}
+library(dplyr)
+
+dat_med2 <- combind_dat |>
+  mutate(
+    CHIP_status = ifelse(CHIP.all == 1, "CHIP+", "CHIP-"),
+    score_group = ifelse(
+      score_multiomic_z >= median(score_multiomic_z, na.rm = TRUE),
+      "High score", "Low score"
+    ),
+    vascular_med = ifelse(statin == 1 | antithrombotic == 1, 1, 0),
+    med_group = ifelse(vascular_med == 1, "Medication", "No medication"),
+    chip_score_med_group = paste(CHIP_status, score_group, med_group, sep = " / ")
+  )
+```
+
+```{r}
+event_rate_df <- dat_med2 |>
+  group_by(chip_score_med_group) |>
+  summarise(
+    n = n(),
+    events = sum(thromb == 1, na.rm = TRUE),
+    event_rate = events / n,
+    .groups = "drop"
+  )
+```
+
+```{r}
+event_rate_df |>
+  ggplot(aes(x = reorder(chip_score_med_group, event_rate), y = event_rate)) +
+  geom_col(width = 0.7) +
+  geom_text(
+    aes(label = paste0(round(event_rate * 100, 1), "%")),
+    hjust = -0.2,
+    size = 3.5
+  ) +
+  coord_flip() +
+  scale_y_continuous(labels = scales::percent_format(), expand = expansion(mult = c(0, 0.12))) +
+  theme_test() +
+  labs(
+    x = NULL,
+    y = "Thrombotic event rate"
+  )
+```
+#### cr
+```{r}
+cr_time_df <- competing_risk.df |> select(eid, time, status, end_date)
+
+dat_fig5_cr <- combind_dat |>
+  left_join(cr_time_df, by = "eid")
+dat_fig5_cr$status <- dat_fig5_cr$status.y
+
+dat_fig5_cr |>
+  summarise(
+    n = n(),
+    missing_time = sum(is.na(time)),
+    missing_status = sum(is.na(status))
+  )
+
+dat_fig5_cr <- dat_fig5_cr |>
+  mutate(
+    time_year = time / 365.25,
+    CHIP_status = ifelse(CHIP.all == 1, "CHIP+", "CHIP-"),
+    score_group = ifelse(
+      score_multiomic_z >= median(score_multiomic_z, na.rm = TRUE),
+      "High score", "Low score"
+    ),
+    medication = ifelse(
+      statin == 1 | antidiabetic == 1 | antithrombotic == 1,
+      "Medication", "No medication"
+    ),
+    chip_score_group = paste(CHIP_status, score_group, sep = " / "),
+    chip_score_med_group = paste(CHIP_status, score_group, medication, sep = " / ")
+  )
+```
+
+```{r}
+library(cmprsk)
+
+dat_fig5_cr <- dat_fig5_cr |>
+  mutate(
+    chip_score_group = factor(
+      chip_score_group,
+      levels = c(
+        "CHIP- / Low score",
+        "CHIP+ / Low score",
+        "CHIP- / High score",
+        "CHIP+ / High score"
+      )
+    )
+  )
+
+ci_score <- cuminc(
+  ftime = dat_fig5_cr$time_year,
+  fstatus = dat_fig5_cr$status,
+  group = dat_fig5_cr$chip_score_group,
+  cencode = 0
+)
+
+plot(ci_score)
+```
+
+
+```{r}
+cuminc_to_df_event1 <- function(ci_obj) {
+  names(ci_obj) |>
+    keep(~ !.x %in% "Tests") |>
+    keep(~ grepl(" 1$", .x)) |>
+    map_dfr(function(nm) {
+      tibble(
+        group_event = nm,
+        time = ci_obj[[nm]]$time,
+        estimate = ci_obj[[nm]]$est,
+        variance = ci_obj[[nm]]$var
+      )
+    }) |>
+    mutate(
+      group = sub(" 1$", "", group_event),
+      se = sqrt(variance),
+      conf.low = pmax(0, estimate - 1.96 * se),
+      conf.high = pmin(1, estimate + 1.96 * se)
+    )
+}
+
+```
+```{r}
+ci_score_df <- cuminc_to_df_event1(ci_score)
+
+p_5_b2_3 <- ci_score_df |>
+  ggplot(aes(x = time, y = estimate, color = group)) +
+  geom_step(linewidth = 1.1) +
+  theme_test() +
+  labs(
+    x = "Time in years",
+    y = "Cumulative incidence of thrombotic events",
+    color = NULL
+  ) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  theme(
+    legend.position = "right"
+  )
+
+p_5_b2_3
+```
+```{r}
+df <- dat_fig5_cr |>  filter(!is.na(eid), !is.na(time_year), !is.na(status), status %in% c(0, 1, 2), time_year >= 0)
+ch <- "chip_score_group"
+var.arr = c("Sex","Age","BMI","Smoking","pc1","pc2","pc3","pc4","pc5","pc6","pc7","pc8","pc9","pc10","statin","antidiabetic","antithrombotic")
+  fg <- finegray(reformulate(c(ch, var.arr,"eid"), response = "Surv(time/365.25, status)"), 
+               data=df, etype = 1)
+  fit_fg_crude <- coxph(reformulate(c(ch), response = "Surv(fgstart, fgstop, fgstatus)"),
+                     data = fg, weights = fgwt, ties = "efron", robust = TRUE,cluster = eid)
+  fit_fg_adj <- coxph(reformulate(c(ch,var.arr), response = "Surv(fgstart, fgstop, fgstatus)"),
+                     data = fg, weights = fgwt, ties = "efron", robust = TRUE,cluster = eid)
+  
+  ggforest(fit_fg_adj, data = fg, main = "sHR (Fine-Gray Model)")
+  ggforest(fit_fg_crude, data = fg, main = "sHR (Fine-Gray Model)")
+  
+  
+  
+```
+
+```{r}
+extract_coxph_factor <- function(fit, var_prefix, label){
+  s <- summary(fit)$coefficients
+  
+  rn <- rownames(s)
+  idx <- grepl(paste0("^", var_prefix), rn)
+  
+  if (!any(idx)) {
+    stop("No coefficient found for variable prefix: ", var_prefix,
+         "\nAvailable coefficients are:\n",
+         paste(rn, collapse = "\n"))
+  }
+  
+  data.frame(
+    Model = label,
+    term = rn[idx],
+    HR = s[idx, "exp(coef)"],
+    lower = exp(s[idx, "coef"] - 1.96 * s[idx, "robust se"]),
+    upper = exp(s[idx, "coef"] + 1.96 * s[idx, "robust se"]),
+    p = s[idx, "Pr(>|z|)"],
+    row.names = NULL
+  )
+}
+
+  ch <- "chip_score_group"
+
+df_plot <- bind_rows(
+  extract_coxph_factor(fit_fg_crude, ch, "Unadjusted"),
+  extract_coxph_factor(fit_fg_adj, ch, "Adjusted")
+)
+
+
+df_plot <- df_plot |>
+  dplyr::mutate(
+    Group = gsub(paste0("^", ch), "", term),
+    Group = factor(
+      Group,
+      levels = c(
+        "CHIP+ / Low score",
+        "CHIP- / High score",
+        "CHIP+ / High score"
+      )
+    ),
+    p_lab = dplyr::case_when(
+      p < 0.0001 ~ "****",
+      p < 0.001  ~ "***",
+      p < 0.01   ~ "**",
+      p < 0.05   ~ "*",
+      TRUE ~ "ns"
+    ),
+    label = paste0(
+      round(HR, 2), " [",
+      round(lower, 2), "-",
+      round(upper, 2), "] ",
+      p_lab
+    ),
+    Model = factor(Model, levels = c("Unadjusted", "Adjusted"))
+  )
+
+ref_df <- expand.grid(
+  Model = levels(df_plot$Model),
+  Group = "CHIP- / Low score"
+) |>
+  mutate(
+    HR = 1,
+    lower = 1,
+    upper = 1,
+    p = NA_real_,
+    p_lab = "Ref.",
+    label = "Ref."
+  )
+
+df_plot <- bind_rows(df_plot, ref_df) |>
+  mutate(
+    Group = factor(
+      Group,
+      levels = c(
+        "CHIP- / Low score",
+        "CHIP+ / Low score",
+        "CHIP- / High score",
+        "CHIP+ / High score"
+      )
+    )
+  )
+  
+  
+p_5_b2_4 <- ggplot(df_plot, aes(y = Group, x = HR, color = Model)) + 
+  geom_point(
+    position = position_dodge(width = 0.5),
+    size = 3
+  ) +
+  geom_errorbarh(
+    aes(xmin = lower, xmax = upper),
+    position = position_dodge(width = 0.5),
+    height = 0.18
+  ) +
+  geom_vline(
+    xintercept = 1,
+    linetype = 2,
+    color = "grey50"
+  ) +
+  scale_x_log10() +
+  scale_color_manual(values = mycol3[1:2]) + 
+  geom_text(
+    aes(x = upper * 1.08, label = label),
+    position = position_dodge(width = 0.5),
+    hjust = 0,
+    size = 3,
+    show.legend = FALSE
+  ) +
+  theme_test() +
+  ylab(NULL) + 
+  xlab("Subdistribution hazard ratio (sHR)") +
+  coord_cartesian(xlim = c(
+    min(df_plot$lower, na.rm = TRUE) * 0.85,
+    max(df_plot$upper, na.rm = TRUE) * 1.45
+  ))
+p_5_b2_4
+```
+
+```{r}
+library(dplyr)
+library(purrr)
+library(tibble)
+library(stringr)
+
+# 你想提取的年份
+years_to_extract <- 1:15
+
+# 提取 cuminc 对象中 event = 1，也就是 thrombosis 的曲线
+extract_cif_at_years <- function(ci_obj, years = c(5, 10, 15), event_code = "1") {
+  
+  curve_names <- names(ci_obj)
+  curve_names <- curve_names[!curve_names %in% "Tests"]
+  
+  # 只保留 event_code = 1 的曲线
+  curve_names <- curve_names[str_detect(curve_names, paste0(" ", event_code, "$"))]
+  
+  map_dfr(curve_names, function(nm) {
+    
+    x <- ci_obj[[nm]]
+    
+    group_name <- str_remove(nm, paste0(" ", event_code, "$"))
+    
+    map_dfr(years, function(yr) {
+      
+      idx <- which(x$time <= yr)
+      
+      if (length(idx) == 0) {
+        est <- 0
+        var <- 0
+      } else {
+        est <- x$est[max(idx)]
+        var <- x$var[max(idx)]
+      }
+      
+      se <- sqrt(var)
+      
+      tibble(
+        `CHIP-score group` = group_name,
+        Year = yr,
+        `Cumulative incidence` = est,
+        `Cumulative incidence (%)` = est * 100,
+        `Standard error` = se,
+        `95% CI lower (%)` = pmax(0, est - 1.96 * se) * 100,
+        `95% CI upper (%)` = pmin(1, est + 1.96 * se) * 100
+      )
+    })
+  })
+}
+
+cif_year_df <- extract_cif_at_years(
+  ci_obj = ci_score,
+  years = years_to_extract,
+  event_code = "1"
+)
+
+cif_year_df
+```
+```{r}
+pdf("chip_f5d.pdf", width = 5, height = 3.5, useDingbats = FALSE)
+p_5_b2_1
+p_5_b2_2
+p_5_b2_3
+p_5_b2_4
+dev.off()
+
+```
+
+
+```{r}
+write.table(flow_df_prop, "chip_suppl_table_mlthrom.tsv", sep = "\t", quote = FALSE,row.names = FALSE)
+write.table(med_prop_df, "chip_suppl_table_mlmed1.tsv", sep = "\t", quote = FALSE,row.names = FALSE)
+write.table(pred_med_group_df, "chip_suppl_table_mlmed2.tsv", sep = "\t", quote = FALSE,row.names = FALSE)
+
+write.table(cif_year_df, "chip_suppl_table_mlcif.tsv", sep = "\t", quote = FALSE,row.names = FALSE)
+write.table(df_plot, "chip_suppl_table_mlfg.tsv", sep = "\t", quote = FALSE,row.names = FALSE)
+```
+
+
+### cr other
+```{r}
+run_signature_fg <- function(dat, outcome_df, outcome_name,
+                             score_var = "score_multiomic_z",
+                             chip_var = "CHIP.all",
+                             id_var = "eid") {
+  
+  library(dplyr)
+  library(survival)
+  library(cmprsk)
+  library(purrr)
+  library(tibble)
+  library(ggplot2)
+  
+  group_levels <- c(
+    "CHIP- / Low score",
+    "CHIP+ / Low score",
+    "CHIP- / High score",
+    "CHIP+ / High score"
+  )
+  
+  group_cols <- c(
+    "CHIP- / Low score"  = "#9ec0d2",
+    "CHIP+ / Low score"  = "#df8d8d",
+    "CHIP- / High score" = "#236898",
+    "CHIP+ / High score" = "#96245b"
+  )
+  
+  var_arr <- c(
+    "Sex", "Age", "BMI", "Smoking",
+    paste0("pc", 1:10),
+    "statin", "antidiabetic", "antithrombotic"
+  )
+  
+  dat_fg <- dat |>
+    left_join(
+      outcome_df |>
+        transmute(
+          eid,
+          outcome_time = time,
+          outcome_status = status
+        ),
+      by = "eid"
+    ) |>
+    mutate(
+      time_year = outcome_time / 365.25,
+      status = outcome_status,
+      CHIP_status = ifelse(.data[[chip_var]] == 1, "CHIP+", "CHIP-"),
+      score_group = ifelse(
+        .data[[score_var]] >= median(.data[[score_var]], na.rm = TRUE),
+        "High score", "Low score"
+      ),
+      chip_score_group = paste(CHIP_status, score_group, sep = " / "),
+      chip_score_group = factor(
+        chip_score_group,
+        levels = group_levels
+      )
+    ) |>
+    filter(
+      !is.na(eid),
+      !is.na(time_year),
+      !is.na(status),
+      status %in% c(0, 1, 2),
+      time_year >= 0,
+      !is.na(chip_score_group)
+    )
+  
+  ci_obj <- cuminc(
+    ftime = dat_fg$time_year,
+    fstatus = dat_fg$status,
+    group = dat_fg$chip_score_group,
+    cencode = 0
+  )
+  
+  ci_df <- names(ci_obj) |>
+    purrr::keep(~ !.x %in% "Tests") |>
+    purrr::keep(~ grepl(" 1$", .x)) |>
+    purrr::map_dfr(function(nm) {
+      tibble(
+        group_event = nm,
+        time = ci_obj[[nm]]$time,
+        estimate = ci_obj[[nm]]$est,
+        variance = ci_obj[[nm]]$var
+      )
+    }) |>
+    mutate(
+      group = sub(" 1$", "", group_event),
+      se = sqrt(variance),
+      conf.low = pmax(0, estimate - 1.96 * se),
+      conf.high = pmin(1, estimate + 1.96 * se),
+      group = factor(group, levels = group_levels)
+    )
+  
+  fg <- finegray(
+    reformulate(
+      c("chip_score_group", var_arr, "eid"),
+      response = "Surv(time_year, status)"
+    ),
+    data = dat_fg,
+    etype = 1
+  )
+  
+  fit_crude <- coxph(
+    Surv(fgstart, fgstop, fgstatus) ~ chip_score_group,
+    data = fg,
+    weights = fgwt,
+    ties = "efron",
+    robust = TRUE,
+    cluster = eid
+  )
+  
+  fit_adj <- coxph(
+    reformulate(
+      c("chip_score_group", var_arr),
+      response = "Surv(fgstart, fgstop, fgstatus)"
+    ),
+    data = fg,
+    weights = fgwt,
+    ties = "efron",
+    robust = TRUE,
+    cluster = eid
+  )
+  
+  extract_fg <- function(fit, label) {
+    s <- summary(fit)
+    coef_df <- as.data.frame(s$coefficients)
+    ci_df2 <- as.data.frame(s$conf.int)
+    
+    rn <- rownames(coef_df)
+    idx <- grepl("^chip_score_group", rn)
+    
+    tibble(
+      Model = label,
+      term = rn[idx],
+      HR = ci_df2[idx, "exp(coef)"],
+      lower = ci_df2[idx, "lower .95"],
+      upper = ci_df2[idx, "upper .95"],
+      p = coef_df[idx, "Pr(>|z|)"]
+    )
+  }
+  
+  df_plot <- bind_rows(
+    extract_fg(fit_crude, "Unadjusted"),
+    extract_fg(fit_adj, "Adjusted")
+  ) |>
+    mutate(
+      Group = gsub("^chip_score_group", "", term),
+      Group = factor(Group, levels = group_levels[-1]),
+      p_lab = case_when(
+        p < 0.0001 ~ "****",
+        p < 0.001  ~ "***",
+        p < 0.01   ~ "**",
+        p < 0.05   ~ "*",
+        TRUE ~ "ns"
+      ),
+      label = paste0(round(HR, 2), " ", p_lab),
+      Model = factor(Model, levels = c("Unadjusted", "Adjusted"))
+    )
+  
+  ref_df <- expand.grid(
+    Model = levels(df_plot$Model),
+    Group = "CHIP- / Low score"
+  ) |>
+    mutate(
+      HR = 1,
+      lower = 1,
+      upper = 1,
+      p = NA_real_,
+      p_lab = "Ref.",
+      label = "Ref."
+    )
+  
+  df_plot <- bind_rows(df_plot, ref_df) |>
+    mutate(
+      Group = factor(Group, levels = group_levels),
+      Model = factor(Model, levels = c("Unadjusted", "Adjusted"))
+    )
+  
+  p_ci <- ggplot(ci_df, aes(x = time, y = estimate, color = group)) +
+    geom_step(linewidth = 1.1) +
+    theme_test() +
+    labs(
+      title = outcome_name,
+      x = "Time in years",
+      y = paste0("Cumulative incidence of ", outcome_name),
+      color = NULL
+    ) +
+    scale_color_manual(values = group_cols, drop = FALSE) +
+    scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+    theme(
+      legend.position = "right"
+    )
+  
+  p_fg <- ggplot(
+    df_plot,
+    aes(y = Group, x = HR, color = Group, shape = Model)
+  ) +
+    geom_point(
+      position = position_dodge(width = 0.55),
+      size = 3
+    ) +
+    geom_errorbarh(
+      aes(xmin = lower, xmax = upper),
+      position = position_dodge(width = 0.55),
+      height = 0.18
+    ) +
+    geom_vline(
+      xintercept = 1,
+      linetype = 2,
+      color = "grey50"
+    ) +
+    scale_x_log10() +
+    scale_color_manual(values = group_cols, drop = FALSE) +
+    scale_shape_manual(
+      values = c("Unadjusted" = 16, "Adjusted" = 17)
+    ) +
+    geom_text(
+      aes(x = upper * 1.08, label = label),
+      position = position_dodge(width = 0.55),
+      hjust = 0,
+      size = 3,
+      show.legend = FALSE
+    ) +
+    theme_test() +
+    ylab(NULL) +
+    xlab("Subdistribution hazard ratio (sHR)") +
+    guides(
+      color = "none",
+      shape = guide_legend(title = NULL)
+    ) +
+    coord_cartesian(
+      xlim = c(
+        min(df_plot$lower, na.rm = TRUE) * 0.85,
+        max(df_plot$upper, na.rm = TRUE) * 1.45
+      )
+    )
+  
+  list(
+    data = dat_fg,
+    cuminc = ci_obj,
+    fit_crude = fit_crude,
+    fit_adj = fit_adj,
+    ci_plot_df = ci_df,
+    fg_plot_df = df_plot,
+    p_ci = p_ci,
+    p_fg = p_fg
+  )
+}
+
+make_cr_df <- function(icd10_df,
+                       pheno_df,
+                       icd_pattern,
+                       lag_days = 180,
+                       censor_date = as.Date("2024-12-31")) {
+  
+  event_df <- icd10_df |>
+    dplyr::filter(grepl(icd_pattern, ICD10)) |>
+    dplyr::mutate(date = as.Date(date)) |>
+    dplyr::group_by(eid) |>
+    dplyr::slice_min(order_by = date, n = 1, with_ties = FALSE) |>
+    dplyr::ungroup() |>
+    dplyr::select(eid, ICD10, Diagnosis, event_date = date)
+  
+  cr_df <- pheno_df |>
+    dplyr::left_join(event_df, by = "eid") |>
+    dplyr::mutate(
+      Sex = as.integer(Sex == "Male"),
+      Smoking = as.integer(Smoking == "Yes"),
+      assess_date = as.Date(Date),
+      Date_Death = as.Date(Date_Death),
+      
+      prevalent_or_lag_event = !is.na(event_date) & 
+        event_date <= assess_date + lag_days
+    ) |>
+    dplyr::filter(!prevalent_or_lag_event) |>
+    dplyr::mutate(
+      end_date = pmin(event_date, censor_date, Date_Death, na.rm = TRUE),
+      time = as.numeric(end_date - assess_date),
+      status_num = dplyr::case_when(
+        !is.na(event_date) & event_date == end_date ~ 1L,
+        !is.na(Date_Death) & Date_Death == end_date ~ 2L,
+        TRUE ~ 0L
+      ),
+      status = factor(status_num, levels = c(0, 1, 2))
+    ) |>
+    dplyr::filter(!is.na(time), time >= 0)
+  
+  return(cr_df)
+}
+```
+
+```{r}
+icd_patterns <- list(
+  COPD = "^J4[1-4]",                         # J41-J44
+  Chronic_liver_disease = "^K7[0-7]",        # K70-K77
+  Chronic_kidney_disease = "^N18",           # N18
+  Myeloid_leukemia = "^C9[2-4]",             # C92-C94
+  Heart_failure = "^I50"                     # I50
+)
+
+cr_list <- purrr::imap(
+  icd_patterns,
+  ~ make_cr_df(
+    icd10_df = ukb.icd10.df,
+    pheno_df = chip_mat.phen.df,
+    icd_pattern = .x,
+    lag_days = 180,
+    censor_date = as.Date("2024-12-31")
+  )
+)
+
+purrr::map(cr_list, ~ .x |> dplyr::count(status_num, CHIP.all))
+
+
+```
+
+```{r}
+cr_plot.ls <- lapply(names(cr_list),function(x){
+  res <- run_signature_fg(
+  dat = combind_dat,
+  outcome_df = cr_list[[x]],
+  outcome_name = x
+)
+  res$p_ci | res$p_fg
+})
+cr_plot.ls
+
+
+#pdf("chip_f5e.pdf", width = 10, height = 3.5, useDingbats = FALSE)
+#cr_plot.ls
+#dev.off()
+```
+```{r}
+res_thromb <- run_signature_fg(
+  dat = combind_dat,
+  outcome_df =competing_risk.df,
+  outcome_name = "thromb"
+)
+pdf("chip_f5f.pdf", width = 10, height = 3.5, useDingbats = FALSE)
+res_thromb$p_ci | res_thromb$p_fg
+dev.off()
+```
+
+## Appendix
+```{r}
+#write.csv(chip_mat.phen.df,"chip_mat.phen.csv", quote = FALSE, row.names = FALSE)
+#write.table(ukb.gwas_pheno.df,"GWAS_data/ukb.gwas_pheno.chip_thromb.tsv", quote = FALSE, sep = "\t", row.names = FALSE)
+#write.table(olink.or, "ukb.olink.odd_ratio.tsv", quote = FALSE, sep = "\t", row.names = FALSE)
+#write.table(nmr_meta.or, "ukb.nmr_meta.odd_ratio.tsv", quote = FALSE, sep = "\t", row.names = FALSE)
+#write.table(ukb.icd10.df, "ukb.icd10.long.tsv", quote = FALSE, sep = "\t", row.names = FALSE)
+
+#olink.or <- read.csv("ukb.olink.odd_ratio.tsv", sep = "\t")
+#chip_mat.phen.df <- read.csv("chip_mat.phen.csv")
+#ukb.gwas_pheno.df <- read.csv("GWAS_data/ukb.gwas_pheno.chip_thromb.tsv", sep = "\t")
+
+#save.image(file = "UKB_CHIP_Olink.Rdata")
+load("UKB_CHIP_Olink.Rdata")
+```
+
+```{r}
+limma_olink_volcano <- function(limma_df,pv = 0.05, fc = 1.01,top = 5,gene.list = "",title){
+  #gene.list <- c("FLT3")
+  #top <- 10
+  #fc <- 1.01
+  #pv <- 0.05
+  #gg <- chip.deps
+  gg <- limma_df 
+  gg$Protein <- rownames(gg)
+  gg <- gg |> left_join(olink_anno.df, by = "Protein")
+  gg <- gg |> filter(! is.na(logFC), !is.na(adj.P.Val))
+  gene.list <- c((gg |> filter(logFC > 0) |> top_n(n=-top, wt=P.Value))$Symbol,gene.list)
+  gene.list <- c((gg |> filter(logFC < 0) |> top_n(n=-top, wt=P.Value))$Symbol,gene.list)
+  index <- match(gene.list,gg$Symbol)
+  index <- na.omit(index)
+  gg$group = "no"
+  gg[gg$logFC > log2(fc) & gg$P.Value < pv,]$group <- "up"
+  gg[gg$logFC < -log2(fc) & gg$P.Value < pv,]$group <- "down"
+  gg$color <- gg$group
+  gg$color[index] <- "black"
+  mycolour = c("grey", "#A81E2C","#08537C", "black")
+  names(mycolour) = c("no", "up", "down", "black")
+  gg$label <- ""
+  gg$label[index] <- gg$Symbol[index]
+  gg[gg$group == "no",]$label <- ""
+  #p <- ggplot(gg, aes(x = logFC, y = -log10(adj.P.Val)))
+  p <- ggplot(gg, aes(x = logFC, y = -log10(P.Value)))
+  p <- p + geom_point_rast(aes(color = group,size = abs(t)), shape = 16, alpha = 0.6, show.legend = TRUE)
+  p <- p + geom_point(color = ifelse(gg$label == "" ,NA,"black"), aes(size = abs(t)),shape = 1, show.legend = FALSE)
+  p = p + scale_color_manual(values = mycolour)
+  p = p + scale_fill_manual(values = mycolour)
+  p = p + geom_hline(yintercept = -log10(pv), linetype = "dotted")
+  p = p + geom_vline(xintercept = c(-log2(fc), log2(fc)), linetype = "dotted")
+  p = p + ggrepel::geom_text_repel(aes(label=label,color=group),show.legend = FALSE,fontface = "bold", size = 2.5,box.padding = unit(0.8, "lines"),point.padding = unit(0.3, "lines"), segment.size = 0.3, max.overlaps = 10000)
+  p = p + theme_test() + ggtitle(title)
+  return(p)
+}
+
+limma_bloodcount_volcano <- function(limma_df,title,pv = 0.01, fc = 1, pt.size = 3){
+  #fc <- 1
+  #pv <- 0.01
+  gg <- limma_df
+  gg$Flag <- rownames(gg)
+  index <- match(rownames(gg),data_dict_df.blood_count$ent_id)
+  gg$Event <- data_dict_df.blood_count$ent_name_s[index]
+  gg <- gg |> filter(! is.na(logFC), !is.na(adj.P.Val))
+  gg$group = "no"
+  gg[gg$logFC > log2(fc) & gg$adj.P.Val < pv,]$group <- "up"
+  gg[gg$logFC < -log2(fc) & gg$adj.P.Val < pv,]$group <- "down"
+  mycolour = c("grey", "#A81E2C","#08537C")
+  names(mycolour) = c("no", "up", "down")
+  gg$label <- ""
+  gg$label <- gg$Event
+  gg[gg$group == "no",]$label <- ""
+  p <- ggplot(gg, aes(x = logFC, y = -log10(adj.P.Val)))
+  p <- p + geom_point(aes(color = group), shape = 16, alpha = 0.6, size = pt.size, show.legend = FALSE)
+  p <- p + geom_point(color = ifelse(gg$label == "" ,NA,"black"), shape = 1, size = pt.size, show.legend = FALSE)
+  p = p + scale_color_manual(values = mycolour)
+  p = p + scale_fill_manual(values = mycolour)
+  p = p + geom_hline(yintercept = -log10(pv), linetype = "dotted")
+  p = p + geom_vline(xintercept = c(-log2(fc), log2(fc)), linetype = "dotted")
+  p = p + ggrepel::geom_text_repel(aes(label=label,color=group),show.legend = FALSE,fontface = "bold", size = 2.5,box.padding = unit(0.8, "lines"),point.padding = unit(0.3, "lines"), segment.size = 0.3, max.overlaps = 10000)
+  p = p + theme_test() + ggtitle(title) + xlab("Standardized mean difference (SD units)")
+  return(p)
+}
+
+limma_metabolic_volcano <- function(limma_df,pv = 0.05, fc = 1,top = 5,meta.list="",title){
+  #fc <- 1.00
+  #pv <- 0.05
+  #top <- 5
+  #meta.list <- ""
+  #gg <- topTable(fit, coef="CHIPCH+",number = Inf)
+  gg <- limma_df 
+  gg$meta <- rownames(gg)
+  gg <- gg |> filter(! is.na(logFC), !is.na(adj.P.Val))
+  meta.list <- c((gg |> filter(logFC > 0) |> top_n(n=-top, wt=P.Value))$meta,meta.list)
+  meta.list <- c((gg |> filter(logFC < 0) |> top_n(n=-top, wt=P.Value))$meta,meta.list)
+  index <- match(meta.list,gg$meta)
+  index <- na.omit(index)
+  gg$group = "no"
+  gg[gg$logFC > log2(fc) & gg$adj.P.Val < pv,]$group <- "up"
+  gg[gg$logFC < -log2(fc) & gg$adj.P.Val < pv,]$group <- "down"
+  gg$color <- gg$group
+  gg$color[index] <- "black"
+  mycolour = c("grey", "#A81E2C","#08537C", "black")
+  names(mycolour) = c("no", "up", "down", "black")
+  gg$label <- ""
+  gg$label[index] <- gg$meta[index]
+  gg[gg$group == "no",]$label <- ""
+  p <- ggplot(gg, aes(x = logFC, y = -log10(adj.P.Val)))
+  p <- p + geom_point_rast(aes(color = group), shape = 16, alpha = 0.6, show.legend = FALSE)
+  p <- p + geom_point(color = ifelse(gg$label == "" ,NA,"black"), shape = 1, show.legend = FALSE)
+  p = p + scale_color_manual(values = mycolour)
+  p = p + scale_fill_manual(values = mycolour)
+  p = p + geom_hline(yintercept = -log10(pv), linetype = "dotted")
+  p = p + geom_vline(xintercept = c(-log2(fc), log2(fc)), linetype = "dotted")
+  p = p + ggrepel::geom_text_repel(aes(label=label,color=group),show.legend = FALSE,fontface = "bold", size = 2.5,box.padding = unit(0.8, "lines"),point.padding = unit(0.3, "lines"), segment.size = 0.3, max.overlaps = 10000)
+  p = p + theme_test() + ggtitle(title) + xlab("Standardized mean difference (SD units)")
+  return(p)
+}
+
+```
