@@ -63,9 +63,9 @@ corresponding unified function.
 
 ## Function index
 
-AbelR currently contains 41 functions organized into nine analysis modules.
+AbelR organizes its exported functions into domain-based analysis modules.
 The tables provide a short overview; detailed parameter, input, and return-value
-documentation should be maintained in the function-level roxygen2 comments.
+documentation is maintained in the function-level roxygen2 comments.
 
 ### Differential expression analysis
 
@@ -131,7 +131,7 @@ Source: `R/ukb.R`
 | Function | Description |
 |---|---|
 | `prepare_ukb_icd10_events()` | Align pipe-separated ICD-10 diagnoses with UK Biobank diagnosis-date array fields. |
-| `classify_ukb_thrombosis()` | Classify ICD-10 codes into arterial, venous, pregnancy-related, and other thromboembolism groups. |
+| `classify_ukb_thrombosis()` | Classify ICD-10 codes into configurable thromboembolism groups and subgroups. |
 | `merge_ukb_chip_callsets()` | Merge in-house and UKB-released CHIP variant calls while retaining source-specific VAF values. |
 | `classify_chip_carriers()` | Create participant-level overall, gene-specific, small-clone, and large-clone CHIP indicators. |
 | `make_ukb_competing_risk_data()` | Construct incident-event follow-up data with death represented as a competing event. |
