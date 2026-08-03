@@ -294,9 +294,12 @@ target_for_volcano <- function(
 #' @param max_x Maximum absolute log2 fold change displayed. More extreme values
 #'   are capped at this limit.
 #' @param max_y Maximum displayed `-log10` significance value.
-#' @param top Number of the most significant genes to label in each fold-change
-#'   direction.
+#' @param top Number of genes automatically labelled in each fold-change
+#'   direction. Genes are ranked first by ascending P value, then by descending
+#'   absolute log2 fold change to break P-value ties.
 #' @param adjust Logical; use `padj` when `TRUE` and `pvalue` when `FALSE`.
+#' @param up_color Color used for significantly upregulated genes.
+#' @param down_color Color used for significantly downregulated genes.
 #'
 #' @return A [ggplot2::ggplot] object.
 #'
@@ -312,13 +315,44 @@ volcano_plot_Deseq2 <- function(
   max_x = 100,
   max_y = 100,
   top = 5,
-  adjust
+  adjust,
+  up_color = "#810F7C",
+  down_color = "#006D2C"
 ) {
-  #  deseq2_result.df <- WT1_MUT.deg$result
-  #  target_gene.list <- WT1_status.gene$Symbol
-  #  gene.list <- risk_gene.list
-  #  pv <- 0.05
-  #  fc <- 1.5
+  if (
+    length(top) != 1L ||
+      !is.numeric(top) ||
+      is.na(top) ||
+      !is.finite(top) ||
+      top < 0 ||
+      top != as.integer(top)
+  ) {
+    stop("top must be one non-negative integer.")
+  }
+  top <- as.integer(top)
+  validate_color <- function(color, argument) {
+    if (
+      !is.character(color) ||
+        length(color) != 1L ||
+        is.na(color) ||
+        !nzchar(color)
+    ) {
+      stop(argument, " must be one valid R color.")
+    }
+    valid <- tryCatch(
+      {
+        grDevices::col2rgb(color)
+        TRUE
+      },
+      error = function(e) FALSE
+    )
+    if (!valid) {
+      stop(argument, " must be one valid R color.")
+    }
+  }
+  validate_color(up_color, "up_color")
+  validate_color(down_color, "down_color")
+
   target_gene.list <- target_for_volcano(
     deseq2_result.df,
     gene.list,
@@ -366,12 +400,31 @@ volcano_plot_Deseq2 <- function(
     message(count_message, " No downregulated DEGs were detected.")
   }
 
+  select_top_genes <- function(direction) {
+    if (top == 0L) {
+      return(character())
+    }
+    ranked <- gg[
+      gg$group == direction & !is.na(gg$Symbol),
+      ,
+      drop = FALSE
+    ]
+    ranked <- ranked[
+      order(
+        ranked$padj,
+        -abs(ranked$log2FoldChange),
+        ranked$Symbol,
+        na.last = TRUE
+      ),
+      ,
+      drop = FALSE
+    ]
+    ranked <- ranked[!duplicated(ranked$Symbol), , drop = FALSE]
+    utils::head(ranked$Symbol, top)
+  }
   gene.list <- c(
-    (gg |> filter(group == "up") |> top_n(n = -top, wt = padj))$Symbol,
-    gene.list
-  )
-  gene.list <- c(
-    (gg |> filter(group == "down") |> top_n(n = -top, wt = padj))$Symbol,
+    select_top_genes("up"),
+    select_top_genes("down"),
     gene.list
   )
   gene.list <- unique(gene.list)
@@ -379,8 +432,7 @@ volcano_plot_Deseq2 <- function(
   index <- na.omit(index)
   gg$color <- gg$group
   gg$color[index] <- "black"
-  # mycolour = c("grey", "#A81E2C","#08537C", "black")
-  mycolour <- c("grey", "#810F7C", "#006D2C", "black")
+  mycolour <- c("grey", up_color, down_color, "black")
   names(mycolour) <- c("no", "up", "down", "black")
   gg$label <- ""
   gg$label[index] <- gg$Symbol[index]

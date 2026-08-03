@@ -14,7 +14,9 @@ volcano_plot_Deseq2(
   max_x = 100,
   max_y = 100,
   top = 5,
-  adjust
+  adjust,
+  up_color = "#810F7C",
+  down_color = "#006D2C"
 )
 }
 \arguments{
@@ -40,10 +42,15 @@ are capped at this limit.}
 
 \item{max_y}{Maximum displayed \code{-log10} significance value.}
 
-\item{top}{Number of the most significant genes to label in each fold-change
-direction.}
+\item{top}{Number of genes automatically labelled in each fold-change
+direction. Genes are ranked first by ascending P value, then by descending
+absolute log2 fold change to break P-value ties.}
 
 \item{adjust}{Logical; use \code{padj} when \code{TRUE} and \code{pvalue} when \code{FALSE}.}
+
+\item{up_color}{Color used for significantly upregulated genes.}
+
+\item{down_color}{Color used for significantly downregulated genes.}
 }
 \value{
 A \link[ggplot2:ggplot]{ggplot2::ggplot} object.
