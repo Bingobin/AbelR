@@ -46,7 +46,9 @@ Annotation maxima are used when \code{NULL}.}
 
 \item{remove_rik}{Logical; remove mouse symbols ending in \code{Rik}.}
 
-\item{top_n}{Number of genes labelled per treatment.}
+\item{top_n}{Number of upregulated and downregulated genes labelled per
+treatment. Up to \code{top_n} genes are selected independently in each
+direction.}
 
 \item{cap_value}{Maximum absolute signed significance score displayed.}
 
@@ -61,5 +63,6 @@ A list with the joined data (\code{deg_merge}), labelled genes
 \description{
 Joins one or more DEG tables to human or mouse gene coordinates, calculates
 a signed significance score (\code{log2FoldChange * -log10(padj)}), and draws
-faceted genomic-position plots with top-gene labels.
+faceted genomic-position plots with separate top upregulated and
+downregulated gene labels.
 }

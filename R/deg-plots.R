@@ -879,7 +879,8 @@ plot_deg_comparison <- function(
 #'
 #' Joins one or more DEG tables to human or mouse gene coordinates, calculates
 #' a signed significance score (`log2FoldChange * -log10(padj)`), and draws
-#' faceted genomic-position plots with top-gene labels.
+#' faceted genomic-position plots with separate top upregulated and
+#' downregulated gene labels.
 #'
 #' @param deg_list Named list of DEG data frames, one per treatment or contrast.
 #' @param color_map Named colour vector whose names match `deg_list`.
@@ -894,7 +895,9 @@ plot_deg_comparison <- function(
 #'   Annotation maxima are used when `NULL`.
 #' @param gene_type_filter Optional gene type retained when `Gene_Type` exists.
 #' @param remove_rik Logical; remove mouse symbols ending in `Rik`.
-#' @param top_n Number of genes labelled per treatment.
+#' @param top_n Number of upregulated and downregulated genes labelled per
+#'   treatment. Up to `top_n` genes are selected independently in each
+#'   direction.
 #' @param cap_value Maximum absolute signed significance score displayed.
 #' @param chr_keep Optional chromosomes and order to retain.
 #' @param facet_nrow Number of rows in the treatment facet layout.
@@ -925,6 +928,17 @@ plot_deg_manhattan <- function(
   if (!requireNamespace("ggrepel", quietly = TRUE)) {
     stop("Package 'ggrepel' is required for plot_deg_manhattan().")
   }
+  if (
+    length(top_n) != 1L ||
+      !is.numeric(top_n) ||
+      is.na(top_n) ||
+      !is.finite(top_n) ||
+      top_n < 0 ||
+      top_n != as.integer(top_n)
+  ) {
+    stop("top_n must be one non-negative integer.")
+  }
+  top_n <- as.integer(top_n)
 
   if (species == "mouse") {
     if (is.null(chr_keep)) {
@@ -1026,29 +1040,6 @@ plot_deg_manhattan <- function(
     deg_merge <- deg_merge %>% filter(!grepl("Rik$", Symbol))
   }
 
-  ## cap values
-  deg_merge <- deg_merge %>%
-    mutate(
-      value = ifelse(value > cap_value, cap_value, value),
-      value = ifelse(value < -cap_value, -cap_value, value)
-    )
-
-  ## top genes
-  top_genes <- deg_merge %>%
-    group_by(Treatment) %>%
-    slice_max(order_by = abs(value), n = top_n, with_ties = FALSE) %>%
-    ungroup()
-
-  deg_merge <- deg_merge %>%
-    mutate(
-      label = if_else(
-        paste0(Symbol, Treatment) %in% paste0(top_genes$Symbol, top_genes$Treatment),
-        Symbol,
-        ""
-      ),
-      Treatment = factor(Treatment, levels = names(color_map))
-    )
-
   deg_merge <- deg_merge %>%
     mutate(
       Regulation = case_when(
@@ -1058,6 +1049,41 @@ plot_deg_manhattan <- function(
       ),
       Regulation = factor(Regulation, levels = c("Up", "Down", "NS"))
     )
+
+  ## select top upregulated and downregulated genes independently
+  top_genes <- deg_merge %>%
+    filter(Regulation %in% c("Up", "Down")) %>%
+    arrange(
+      Treatment,
+      Regulation,
+      desc(abs(value)),
+      padj,
+      desc(abs(log2FoldChange)),
+      Symbol
+    ) %>%
+    distinct(Treatment, Regulation, Symbol, .keep_all = TRUE) %>%
+    group_by(Treatment, Regulation) %>%
+    slice_head(n = top_n) %>%
+    ungroup()
+
+  ## cap display values after ranking
+  deg_merge <- deg_merge %>%
+    mutate(
+      value = ifelse(value > cap_value, cap_value, value),
+      value = ifelse(value < -cap_value, -cap_value, value)
+    )
+
+  top_keys <- paste(top_genes$Symbol, top_genes$Treatment, sep = "\r")
+  deg_merge <- deg_merge %>%
+    mutate(
+      label = if_else(
+        paste(Symbol, Treatment, sep = "\r") %in% top_keys,
+        Symbol,
+        ""
+      ),
+      Treatment = factor(Treatment, levels = names(color_map))
+    )
+
   reg_color_map <- c(
     Up = "#A81E2C",
     Down = "#3C5488",
