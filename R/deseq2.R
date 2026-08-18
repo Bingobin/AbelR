@@ -472,6 +472,273 @@ plot_bulkRNA_PCA <- function(
   )
 }
 
+
+#' Plot median TPM expression for one gene
+#'
+#' Uses the TPM and design tables returned by [build_bulkRNA_batches()] to
+#' display one gene across cell lines, batches, groups, and libraries. Bars
+#' show median `log2(TPM + 1)`, error bars show the interquartile range, and
+#' points show individual samples.
+#'
+#' @param bulk_data List returned by [build_bulkRNA_batches()] containing
+#'   `tpm` and `design` data frames.
+#' @param gene One gene symbol or Ensembl gene ID. Ensembl version suffixes are
+#'   ignored during matching.
+#' @param id_col Gene-identifier column in `bulk_data$tpm`.
+#' @param group_colors Character vector of valid R colors. Named colors are
+#'   matched to `Group` levels when all levels are present; otherwise colors
+#'   are recycled in group-level order.
+#'
+#' @return A [ggplot2::ggplot] object.
+#' @export
+plot_gene_tpm_median <- function(
+  bulk_data,
+  gene,
+  id_col = "GID",
+  group_colors = get("mycol", envir = asNamespace("AbelR"))
+) {
+  if (
+    !is.list(bulk_data) ||
+      !all(c("tpm", "design") %in% names(bulk_data))
+  ) {
+    stop("bulk_data must contain both tpm and design.")
+  }
+  if (!is.character(gene) ||
+      length(gene) != 1L ||
+      is.na(gene) ||
+      !nzchar(gene)) {
+    stop("gene must be one non-empty gene symbol or Ensembl ID.")
+  }
+
+  tpm <- bulk_data$tpm
+  design <- bulk_data$design
+  if (!is.data.frame(tpm) || !is.data.frame(design)) {
+    stop("bulk_data$tpm and bulk_data$design must be data frames.")
+  }
+  required_design_cols <- c("CellLine", "Batch", "Group", "Library")
+  missing_design_cols <- setdiff(required_design_cols, colnames(design))
+  if (length(missing_design_cols)) {
+    stop(
+      "Missing design columns: ",
+      paste(missing_design_cols, collapse = ", ")
+    )
+  }
+  if (!id_col %in% colnames(tpm)) {
+    stop("ID column not found in tpm: ", id_col)
+  }
+  if (anyDuplicated(tpm[[id_col]])) {
+    stop("Duplicated ", id_col, " values found in bulk_data$tpm.")
+  }
+  if (is.null(rownames(design)) ||
+      anyNA(rownames(design)) ||
+      any(!nzchar(rownames(design))) ||
+      anyDuplicated(rownames(design))) {
+    stop("bulk_data$design must have unique sample IDs as row names.")
+  }
+
+  sample_ids <- rownames(design)
+  missing_samples <- setdiff(sample_ids, colnames(tpm))
+  if (length(missing_samples)) {
+    stop(
+      "Design samples missing from the TPM table: ",
+      paste(missing_samples, collapse = ", ")
+    )
+  }
+  numeric_samples <- vapply(
+    tpm[, sample_ids, drop = FALSE],
+    function(x) is.numeric(x) || is.integer(x),
+    logical(1)
+  )
+  if (any(!numeric_samples)) {
+    stop(
+      "Non-numeric TPM sample columns: ",
+      paste(sample_ids[!numeric_samples], collapse = ", ")
+    )
+  }
+
+  tpm_gene_ids <- sub("\\..*$", "", as.character(tpm[[id_col]]))
+  query_id <- sub("\\..*$", "", gene)
+  gene_rows <- which(tpm_gene_ids == query_id)
+
+  if (!length(gene_rows) && "Symbol" %in% colnames(tpm)) {
+    gene_rows <- which(
+      toupper(as.character(tpm$Symbol)) == toupper(gene)
+    )
+  }
+
+  if (!length(gene_rows)) {
+    if (
+      !requireNamespace("AnnotationDbi", quietly = TRUE) ||
+        !requireNamespace("org.Hs.eg.db", quietly = TRUE)
+    ) {
+      stop(
+        "Gene symbol mapping requires AnnotationDbi and org.Hs.eg.db, ",
+        "or supply an Ensembl ID directly."
+      )
+    }
+    mapped <- AnnotationDbi::mapIds(
+      org.Hs.eg.db::org.Hs.eg.db,
+      keys = toupper(gene),
+      keytype = "SYMBOL",
+      column = "ENSEMBL",
+      multiVals = "list"
+    )
+    mapped_ids <- unique(stats::na.omit(as.character(unlist(mapped))))
+    gene_rows <- which(tpm_gene_ids %in% mapped_ids)
+  }
+
+  if (!length(gene_rows)) {
+    stop("Gene not found in bulk_data$tpm: ", gene)
+  }
+  if (length(gene_rows) > 1L) {
+    stop(
+      "Gene matched more than one TPM row: ",
+      paste(tpm[[id_col]][gene_rows], collapse = ", ")
+    )
+  }
+
+  plot_df <- data.frame(
+    SampleID = sample_ids,
+    design[sample_ids, , drop = FALSE],
+    TPM = as.numeric(tpm[gene_rows, sample_ids, drop = TRUE]),
+    check.names = FALSE,
+    row.names = NULL
+  )
+  plot_df <- plot_df[!is.na(plot_df$TPM), , drop = FALSE]
+  if (!nrow(plot_df)) {
+    stop("All TPM values are missing for gene: ", gene)
+  }
+  if (any(!is.finite(plot_df$TPM)) || any(plot_df$TPM < 0)) {
+    stop("TPM values must be finite and non-negative.")
+  }
+
+  plot_df$log2_TPM_plus_1 <- log2(plot_df$TPM + 1)
+  plot_df$Batch <- factor(as.character(plot_df$Batch))
+  group_levels <- unique(as.character(plot_df$Group))
+  if ("SCR" %in% group_levels) {
+    group_levels <- c("SCR", setdiff(group_levels, "SCR"))
+  }
+  plot_df$Group <- factor(
+    as.character(plot_df$Group),
+    levels = group_levels
+  )
+
+  if (!is.character(group_colors) || !length(group_colors) || anyNA(group_colors)) {
+    stop("group_colors must contain at least one valid R color.")
+  }
+  valid_colors <- vapply(group_colors, function(color) {
+    tryCatch(
+      {
+        grDevices::col2rgb(color)
+        TRUE
+      },
+      error = function(e) FALSE
+    )
+  }, logical(1))
+  if (any(!valid_colors)) {
+    stop(
+      "Invalid colors in group_colors: ",
+      paste(group_colors[!valid_colors], collapse = ", ")
+    )
+  }
+  if (!is.null(names(group_colors)) &&
+      all(group_levels %in% names(group_colors))) {
+    group_palette <- group_colors[group_levels]
+  } else {
+    group_palette <- stats::setNames(
+      rep(group_colors, length.out = length(group_levels)),
+      group_levels
+    )
+  }
+
+  summary_df <- plot_df |>
+    dplyr::group_by(
+      dplyr::across(
+        dplyr::all_of(c("CellLine", "Batch", "Library", "Group"))
+      )
+    ) |>
+    dplyr::summarise(
+      n = dplyr::n(),
+      Median = stats::median(.data[["log2_TPM_plus_1"]], na.rm = TRUE),
+      Q1 = stats::quantile(
+        .data[["log2_TPM_plus_1"]],
+        0.25,
+        na.rm = TRUE
+      ),
+      Q3 = stats::quantile(
+        .data[["log2_TPM_plus_1"]],
+        0.75,
+        na.rm = TRUE
+      ),
+      .groups = "drop"
+    )
+
+  dodge <- ggplot2::position_dodge(width = 0.8)
+  ggplot2::ggplot(
+    summary_df,
+    ggplot2::aes(
+      x = .data[["Group"]],
+      y = .data[["Median"]],
+      fill = .data[["Group"]],
+      group = .data[["Batch"]]
+    )
+  ) +
+    ggplot2::geom_col(
+      position = dodge,
+      width = 0.7,
+      color = "black",
+      linewidth = 0.35,
+      alpha = 0.9
+    ) +
+    ggplot2::geom_errorbar(
+      ggplot2::aes(
+        ymin = .data[["Q1"]],
+        ymax = .data[["Q3"]]
+      ),
+      position = dodge,
+      width = 0.3,
+      linewidth = 1
+    ) +
+    ggplot2::geom_point(
+      data = plot_df,
+      ggplot2::aes(
+        x = .data[["Group"]],
+        y = .data[["log2_TPM_plus_1"]],
+        group = .data[["Batch"]]
+      ),
+      position = ggplot2::position_jitter(
+        width = 0.08,
+        height = 0
+      ),
+      inherit.aes = FALSE,
+      shape = 16,
+      size = 3,
+      color = "black",
+      alpha = 0.6
+    ) +
+    ggplot2::scale_fill_manual(values = group_palette, drop = FALSE) +
+    ggplot2::facet_grid(
+      ~ CellLine + Batch + Library,
+      scales = "free_x",
+      space = "free_x"
+    ) +
+    ggplot2::labs(
+      title = paste0(gene, " expression"),
+      subtitle = "Bars: median; points: samples; error bars: IQR",
+      x = "Group",
+      y = expression(log[2](TPM + 1)),
+      fill = "Group"
+    ) +
+    ggplot2::theme_test(base_size = 12) +
+    ggplot2::theme(
+      strip.background = ggplot2::element_rect(
+        fill = "grey95",
+        color = "black"
+      ),
+      axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)
+    )
+}
+
 #' Run a filtered two-group DESeq2 analysis
 #'
 #' Selects treatment and control samples from a shared design table, fits a

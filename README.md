@@ -75,6 +75,7 @@ Source: `R/deseq2.R`
 |---|---|
 | `build_bulkRNA_batches()` | Merge batch-specific count and TPM tables and construct `CellLine/Library/Batch/Group` sample metadata. |
 | `plot_bulkRNA_PCA()` | Calculate VST-based sample PCA from `build_bulkRNA_batches()` output and draw a batch-aware static or interactive plot. |
+| `plot_gene_tpm_median()` | Plot one gene's median log2(TPM + 1), interquartile range, and sample values across cell lines, batches, groups, and libraries. |
 | `DESeq2_DEG_analysis()` | Run a two-group human or mouse DESeq2 analysis using the shared species-aware implementation. |
 | `DESeq2_DEG_analysis_batch()` | Run human or mouse DESeq2 analysis using the same `Group/Batch/Library` design and `GID` matrix format. |
 | `DESeq2_DEG_extract()` | Extract significantly upregulated and downregulated genes and optionally draw a heatmap. |
