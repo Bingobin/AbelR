@@ -274,6 +274,361 @@ enrich_combind <- function(
 }
 
 
+#' Run MSigDB over-representation analysis
+#'
+#' Performs over-representation analysis for one or more selected native Human
+#' or Mouse MSigDB collections using gene symbols. Human and mouse use distinct
+#' official collection names.
+#'
+#' @param gene Character vector of human or mouse gene symbols.
+#' @param database Character vector naming one or more species-specific MSigDB
+#'   collections or subcollections. If `NULL`, `"H"` is used for human and
+#'   `"MH"` for mouse. See Details for all supported names.
+#' @param species Species name or code accepted by AbelR: `"human"`, `"hsa"`,
+#'   `"Homo sapiens"`, `"mouse"`, `"mmu"`, or `"Mus musculus"`.
+#' @param universe Optional character vector of background gene symbols from
+#'   the same species as `gene`.
+#' @param pvalueCutoff,qvalueCutoff P-value and q-value cutoffs passed to
+#'   [clusterProfiler::enricher()].
+#' @param pAdjustMethod Multiple-testing correction method.
+#' @param minGSSize,maxGSSize Minimum and maximum gene-set sizes.
+#' @param return_object Logical; return `enrichResult` objects instead of data
+#'   frames.
+#'
+#' @details
+#' **Human MSigDB (`species = "human"`)**
+#'
+#' - `H`: Hallmark gene sets representing 50 coherent biological states and
+#'   processes; a useful first-pass overview.
+#' - `C1`: genes grouped by human chromosome cytogenetic bands; useful for
+#'   detecting regional or copy-number-associated signals.
+#' - `C2`, `C2:CGP`, `C2:CP`: curated gene sets, chemical/genetic perturbation
+#'   signatures, or canonical pathways, respectively.
+#' - `C2:CP:BIOCARTA`, `C2:CP:KEGG_MEDICUS`, `C2:CP:KEGG_LEGACY`,
+#'   `C2:CP:PID`, `C2:CP:REACTOME`, `C2:CP:WIKIPATHWAYS`: pathway collections
+#'   from the named resources. `KEGG_LEGACY`, BioCarta, and PID are mainly
+#'   useful for comparison with older analyses.
+#' - `C3`, `C3:MIR:MIRDB`, `C3:MIR:MIR_LEGACY`, `C3:TFT:GTRD`,
+#'   `C3:TFT:TFT_LEGACY`: predicted microRNA or transcription-factor targets;
+#'   useful for generating regulatory hypotheses, not proving direct binding.
+#' - `C4`, `C4:3CA`, `C4:CGN`, `C4:CM`: computational cancer gene sets,
+#'   including cancer-cell metaprograms, cancer-gene neighbourhoods, and cancer
+#'   modules.
+#' - `C5`, `C5:GO:BP`, `C5:GO:CC`, `C5:GO:MF`, `C5:HPO`: ontology gene sets for
+#'   biological processes, cellular components, molecular functions, or human
+#'   disease phenotypes.
+#' - `C6`: oncogenic perturbation signatures; useful for relating genes to
+#'   cancer-associated pathway activity.
+#' - `C7`, `C7:IMMUNESIGDB`, `C7:VAX`: immune states, immune perturbations, or
+#'   vaccine-response signatures.
+#' - `C8`: curated human cell-type marker signatures from single-cell studies.
+#' - `C9`: computational perturbation signatures inferred from DepMap CRISPR
+#'   dependency and CCLE expression profiles.
+#'
+#' **Mouse MSigDB (`species = "mouse"`)**
+#'
+#' - `MH`: mouse-ortholog Hallmark gene sets; a useful first-pass overview.
+#' - `M1`: genes grouped by mouse chromosome cytogenetic bands.
+#' - `M2`, `M2:CGP`, `M2:CP`: mouse-native curated sets, perturbation
+#'   signatures, or canonical pathways.
+#' - `M2:CP:BIOCARTA`, `M2:CP:REACTOME`, `M2:CP:WIKIPATHWAYS`: mouse canonical
+#'   pathway subcollections. Mouse MSigDB does not provide the human KEGG or PID
+#'   subcollections listed above.
+#' - `M3`, `M3:MIR:MIRDB`, `M3:TFT:GTRD`: predicted mouse microRNA or
+#'   transcription-factor targets.
+#' - `M5`, `M5:GO:BP`, `M5:GO:CC`, `M5:GO:MF`: mouse Gene Ontology sets.
+#' - `M5:MPT`: cancer-related terms from the Mammalian Phenotype Ontology.
+#' - `M7`: mouse immune-cell states and immune perturbation signatures.
+#' - `M8`: mouse cell-type marker signatures from single-cell studies.
+#'
+#' An enriched set indicates overlap with the supplied genes. It does not by
+#' itself establish pathway activation, direct regulation, or altered cell-type
+#' abundance. Interpret results with expression direction and experimental
+#' context. Missing dependencies, database-loading failures, and empty
+#' enrichment results generate warnings and return `NULL` rather than stopping
+#' a batch workflow. Invalid species, database names, and parameter values still
+#' generate errors.
+#'
+#' @return For one database, a data frame or `enrichResult` object. If the
+#'   analysis cannot be run or has no enriched terms, a warning is issued and
+#'   `NULL` is returned. For multiple databases, a named list is returned and
+#'   failed or empty analyses are represented by `NULL` entries.
+#' @export
+EnrichMSigDB <- function(
+  gene,
+  database = NULL,
+  species = "human",
+  universe = NULL,
+  pvalueCutoff = 1,
+  qvalueCutoff = 1,
+  pAdjustMethod = "BH",
+  minGSSize = 10,
+  maxGSSize = 500,
+  return_object = FALSE
+) {
+  species <- .abel_normalize_species(species)
+  msig_species <- switch(
+    species,
+    human = "Homo sapiens",
+    mouse = "Mus musculus"
+  )
+  db_species <- if (species == "human") "HS" else "MM"
+  human_db_map <- list(
+    H = c("H", NA_character_),
+    C1 = c("C1", NA_character_),
+    C2 = c("C2", NA_character_),
+    "C2:CGP" = c("C2", "CGP"),
+    "C2:CP" = c("C2", "CP"),
+    "C2:CP:BIOCARTA" = c("C2", "CP:BIOCARTA"),
+    "C2:CP:KEGG_LEGACY" = c("C2", "CP:KEGG_LEGACY"),
+    "C2:CP:KEGG_MEDICUS" = c("C2", "CP:KEGG_MEDICUS"),
+    "C2:CP:PID" = c("C2", "CP:PID"),
+    "C2:CP:REACTOME" = c("C2", "CP:REACTOME"),
+    "C2:CP:WIKIPATHWAYS" = c("C2", "CP:WIKIPATHWAYS"),
+    C3 = c("C3", NA_character_),
+    "C3:MIR:MIRDB" = c("C3", "MIR:MIRDB"),
+    "C3:MIR:MIR_LEGACY" = c("C3", "MIR:MIR_LEGACY"),
+    "C3:TFT:GTRD" = c("C3", "TFT:GTRD"),
+    "C3:TFT:TFT_LEGACY" = c("C3", "TFT:TFT_LEGACY"),
+    C4 = c("C4", NA_character_),
+    "C4:3CA" = c("C4", "3CA"),
+    "C4:CGN" = c("C4", "CGN"),
+    "C4:CM" = c("C4", "CM"),
+    C5 = c("C5", NA_character_),
+    "C5:GO:BP" = c("C5", "GO:BP"),
+    "C5:GO:CC" = c("C5", "GO:CC"),
+    "C5:GO:MF" = c("C5", "GO:MF"),
+    "C5:HPO" = c("C5", "HPO"),
+    C6 = c("C6", NA_character_),
+    C7 = c("C7", NA_character_),
+    "C7:IMMUNESIGDB" = c("C7", "IMMUNESIGDB"),
+    "C7:VAX" = c("C7", "VAX"),
+    C8 = c("C8", NA_character_),
+    C9 = c("C9", NA_character_)
+  )
+  mouse_db_map <- list(
+    MH = c("MH", NA_character_),
+    M1 = c("M1", NA_character_),
+    M2 = c("M2", NA_character_),
+    "M2:CGP" = c("M2", "CGP"),
+    "M2:CP" = c("M2", "CP"),
+    "M2:CP:BIOCARTA" = c("M2", "CP:BIOCARTA"),
+    "M2:CP:REACTOME" = c("M2", "CP:REACTOME"),
+    "M2:CP:WIKIPATHWAYS" = c("M2", "CP:WIKIPATHWAYS"),
+    M3 = c("M3", NA_character_),
+    "M3:MIR:MIRDB" = c("M3", "MIR:MIRDB"),
+    "M3:TFT:GTRD" = c("M3", "TFT:GTRD"),
+    M5 = c("M5", NA_character_),
+    "M5:GO:BP" = c("M5", "GO:BP"),
+    "M5:GO:CC" = c("M5", "GO:CC"),
+    "M5:GO:MF" = c("M5", "GO:MF"),
+    "M5:MPT" = c("M5", "MPT"),
+    M7 = c("M7", NA_character_),
+    M8 = c("M8", NA_character_)
+  )
+  db_map <- if (species == "human") human_db_map else mouse_db_map
+
+  if (is.null(database)) {
+    database <- if (species == "human") "H" else "MH"
+  }
+  if (!is.character(database) || !length(database) || anyNA(database)) {
+    stop("database must contain at least one supported database name.")
+  }
+  database <- toupper(database)
+  unsupported <- setdiff(database, names(db_map))
+  if (length(unsupported)) {
+    stop(
+      "Unsupported ", species, " database: ",
+      paste(unsupported, collapse = ", "),
+      "\nSupported ", species, " databases: ",
+      paste(names(db_map), collapse = ", ")
+    )
+  }
+
+  gene <- unique(as.character(gene))
+  gene <- gene[!is.na(gene) & nzchar(gene)]
+  if (!length(gene)) {
+    warning("No valid genes were provided; returning NULL.", call. = FALSE)
+    return(NULL)
+  }
+  if (!is.null(universe)) {
+    universe <- unique(as.character(universe))
+    universe <- universe[!is.na(universe) & nzchar(universe)]
+    if (!length(universe)) {
+      warning(
+        "universe contains no valid genes; using the gene-set database ",
+        "background instead.",
+        call. = FALSE
+      )
+      universe <- NULL
+    }
+  }
+  if (!is.numeric(pvalueCutoff) || length(pvalueCutoff) != 1L ||
+      is.na(pvalueCutoff) || pvalueCutoff < 0 || pvalueCutoff > 1) {
+    stop("pvalueCutoff must be one number between 0 and 1.")
+  }
+  if (!is.numeric(qvalueCutoff) || length(qvalueCutoff) != 1L ||
+      is.na(qvalueCutoff) || qvalueCutoff < 0 || qvalueCutoff > 1) {
+    stop("qvalueCutoff must be one number between 0 and 1.")
+  }
+  if (!is.numeric(minGSSize) || length(minGSSize) != 1L ||
+      is.na(minGSSize) || minGSSize < 1 || minGSSize %% 1 != 0) {
+    stop("minGSSize must be one positive integer.")
+  }
+  if (!is.numeric(maxGSSize) || length(maxGSSize) != 1L ||
+      is.na(maxGSSize) || maxGSSize < minGSSize || maxGSSize %% 1 != 0) {
+    stop("maxGSSize must be an integer greater than or equal to minGSSize.")
+  }
+  if (!is.logical(return_object) || length(return_object) != 1L ||
+      is.na(return_object)) {
+    stop("return_object must be TRUE or FALSE.")
+  }
+
+  if (!requireNamespace("msigdbr", quietly = TRUE)) {
+    warning("Package 'msigdbr' is required; returning NULL.", call. = FALSE)
+    return(NULL)
+  }
+  if (!requireNamespace("clusterProfiler", quietly = TRUE)) {
+    warning(
+      "Package 'clusterProfiler' is required; returning NULL.",
+      call. = FALSE
+    )
+    return(NULL)
+  }
+  msigdbr_args <- names(formals(msigdbr::msigdbr))
+  if (species == "mouse" && !"db_species" %in% msigdbr_args) {
+    warning(
+      "Native Mouse MSigDB requires msigdbr >= 10.0.0. ",
+      "Please update the 'msigdbr' package; returning NULL.",
+      call. = FALSE
+    )
+    return(NULL)
+  }
+
+  load_msigdb <- function(collection, subcollection) {
+    if ("collection" %in% msigdbr_args) {
+      args <- list(
+        db_species = db_species,
+        species = msig_species,
+        collection = collection
+      )
+      if (!is.na(subcollection)) {
+        args$subcollection <- subcollection
+      }
+    } else {
+      args <- list(
+        species = msig_species,
+        category = collection
+      )
+      if (!is.na(subcollection)) {
+        args$subcategory <- subcollection
+      }
+    }
+    do.call(msigdbr::msigdbr, args)
+  }
+
+  run_one <- function(db) {
+    tryCatch(
+      {
+        collection <- unname(db_map[[db]][1])
+        subcollection <- unname(db_map[[db]][2])
+        message("Running ", species, " MSigDB enrichment: ", db)
+
+        msig <- load_msigdb(collection, subcollection)
+        required_cols <- c("gs_name", "gene_symbol")
+        missing_cols <- setdiff(required_cols, colnames(msig))
+        if (length(missing_cols)) {
+          stop(
+            "msigdbr result is missing required columns: ",
+            paste(missing_cols, collapse = ", ")
+          )
+        }
+        if (!nrow(msig)) {
+          warning(
+            "No gene sets were found for ", db, "; returning NULL.",
+            call. = FALSE
+          )
+          return(NULL)
+        }
+
+        term2gene <- unique(data.frame(
+          term = as.character(msig$gs_name),
+          gene = as.character(msig$gene_symbol),
+          stringsAsFactors = FALSE
+        ))
+        if ("gs_description" %in% colnames(msig)) {
+          term_name <- as.character(msig$gs_description)
+        } else {
+          term_name <- as.character(msig$gs_name)
+        }
+        missing_name <- is.na(term_name) | !nzchar(term_name)
+        term_name[missing_name] <- as.character(msig$gs_name[missing_name])
+        term2name <- unique(data.frame(
+          term = as.character(msig$gs_name),
+          name = term_name,
+          stringsAsFactors = FALSE
+        ))
+
+        enrichment <- clusterProfiler::enricher(
+          gene = gene,
+          universe = universe,
+          TERM2GENE = term2gene,
+          TERM2NAME = term2name,
+          pvalueCutoff = pvalueCutoff,
+          qvalueCutoff = qvalueCutoff,
+          pAdjustMethod = pAdjustMethod,
+          minGSSize = minGSSize,
+          maxGSSize = maxGSSize
+        )
+        if (is.null(enrichment)) {
+          warning(
+            "No enrichment result was returned for ", db, "; returning NULL.",
+            call. = FALSE
+          )
+          return(NULL)
+        }
+        if (return_object) {
+          return(enrichment)
+        }
+
+        result <- as.data.frame(enrichment)
+        if (!nrow(result)) {
+          warning(
+            "No enriched terms were found for ", db, "; returning NULL.",
+            call. = FALSE
+          )
+          return(NULL)
+        }
+        result$Database <- db
+        result$Species <- species
+        result <- result[, c(
+          "Database",
+          "Species",
+          setdiff(colnames(result), c("Database", "Species"))
+        ), drop = FALSE]
+        result
+      },
+      error = function(e) {
+        warning(
+          "MSigDB enrichment failed for ", db, ": ",
+          conditionMessage(e),
+          "; returning NULL.",
+          call. = FALSE
+        )
+        NULL
+      }
+    )
+  }
+
+  result <- lapply(database, run_one)
+  names(result) <- database
+  if (length(database) == 1L) {
+    return(result[[1]])
+  }
+  result
+}
+
+
 #' Summarize multiple enrichment categories
 #'
 #' Selects rows from GO, WikiPathways, and KEGG enrichment results and combines

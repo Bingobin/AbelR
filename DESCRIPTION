@@ -53,7 +53,7 @@ Suggests:
     limma,
     MAGeCKFlute,
     monocle3,
-    msigdbr,
+    msigdbr (>= 10.0.0),
     openxlsx,
     org.Mm.eg.db,
     pheatmap,

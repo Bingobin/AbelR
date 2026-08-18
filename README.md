@@ -146,6 +146,7 @@ Source: `R/enrichment.R`
 
 | Function | Description |
 |---|---|
+| `EnrichMSigDB()` | Run human or mouse MSigDB over-representation analysis for one or more selected gene-set databases. |
 | `enrich_combind()` | Unified GO analysis with optional KEGG, Reactome, Hallmark, and WikiPathways results. |
 | `enricher_plot()` | Combine selected enrichment categories into a summary visualization. |
 | `gsea_plot_custorm()` | Build a customized GSEA running-score plot for selected terms. |
