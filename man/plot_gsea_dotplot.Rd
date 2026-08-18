@@ -4,24 +4,42 @@
 \alias{plot_gsea_dotplot}
 \title{Plot selected GSEA pathways as a dot plot}
 \usage{
-plot_gsea_dotplot(gsea_result, top_n = 20, label_pathways = NULL)
+plot_gsea_dotplot(
+  gsea_result,
+  top_n = 20,
+  label_pathways = NULL,
+  group_order = NULL
+)
 }
 \arguments{
-\item{gsea_result}{A \code{clusterProfiler} GSEA result object or a data frame
-containing \code{Description}, \code{NES}, \code{pvalue}, and \code{p.adjust}.}
+\item{gsea_result}{A \code{clusterProfiler} GSEA result object, a data frame, or a
+list of group-level results from the same gene-set database. Each result
+must contain \code{Description}, \code{NES}, \code{pvalue}, and \code{p.adjust}. List names are
+used as group labels; unnamed elements are labelled \code{Group1}, \code{Group2}, and
+so on with a warning.}
 
-\item{top_n}{Number of pathways with the smallest adjusted P values (or raw
-P values when adjusted P values are unavailable) to include automatically.
-Set to \code{0} or \code{NULL} to use only \code{label_pathways}.}
+\item{top_n}{Number of pathways selected independently from each group using
+the smallest adjusted P values, or raw P values when adjusted P values are
+all missing. Supply one number for every group, or a named numeric vector
+to set different values for different groups. Set to \code{0} or \code{NULL} to use
+only \code{label_pathways}.}
 
 \item{label_pathways}{Optional character vector of pathway descriptions to
-include.}
+include. These pathways are placed first and displayed from top to bottom
+in exactly the supplied order. Automatically selected top pathways not
+already listed are appended below them.}
+
+\item{group_order}{Optional character vector specifying the left-to-right
+order of groups. The input list order is used by default.}
 }
 \value{
 A \code{\link[ggplot2:ggplot]{ggplot2::ggplot}} object.
 }
 \description{
-Selects the most significant pathways from a GSEA result and combines them
-with optional user-specified pathways. Point size represents adjusted
-P-value significance, while colour represents normalized enrichment score.
+Selects pathways from one GSEA result or from multiple group-level results
+generated from the same gene-set database. For multiple groups, the union of
+independently selected top pathways is displayed on a shared y-axis and the
+group names are displayed on the x-axis for direct comparison. When every
+selected term has the same uppercase database prefix, such as \code{HALLMARK_},
+the prefix is moved to the y-axis title and removed from the term labels.
 }

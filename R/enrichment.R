@@ -367,8 +367,7 @@ EnrichMSigDB <- function(
   return_object = FALSE
 ) {
   species <- .abel_normalize_species(species)
-  msig_species <- switch(
-    species,
+  msig_species <- switch(species,
     human = "Homo sapiens",
     mouse = "Mus musculus"
   )
@@ -464,23 +463,23 @@ EnrichMSigDB <- function(
     }
   }
   if (!is.numeric(pvalueCutoff) || length(pvalueCutoff) != 1L ||
-      is.na(pvalueCutoff) || pvalueCutoff < 0 || pvalueCutoff > 1) {
+    is.na(pvalueCutoff) || pvalueCutoff < 0 || pvalueCutoff > 1) {
     stop("pvalueCutoff must be one number between 0 and 1.")
   }
   if (!is.numeric(qvalueCutoff) || length(qvalueCutoff) != 1L ||
-      is.na(qvalueCutoff) || qvalueCutoff < 0 || qvalueCutoff > 1) {
+    is.na(qvalueCutoff) || qvalueCutoff < 0 || qvalueCutoff > 1) {
     stop("qvalueCutoff must be one number between 0 and 1.")
   }
   if (!is.numeric(minGSSize) || length(minGSSize) != 1L ||
-      is.na(minGSSize) || minGSSize < 1 || minGSSize %% 1 != 0) {
+    is.na(minGSSize) || minGSSize < 1 || minGSSize %% 1 != 0) {
     stop("minGSSize must be one positive integer.")
   }
   if (!is.numeric(maxGSSize) || length(maxGSSize) != 1L ||
-      is.na(maxGSSize) || maxGSSize < minGSSize || maxGSSize %% 1 != 0) {
+    is.na(maxGSSize) || maxGSSize < minGSSize || maxGSSize %% 1 != 0) {
     stop("maxGSSize must be an integer greater than or equal to minGSSize.")
   }
   if (!is.logical(return_object) || length(return_object) != 1L ||
-      is.na(return_object)) {
+    is.na(return_object)) {
     stop("return_object must be TRUE or FALSE.")
   }
 
@@ -680,7 +679,7 @@ enricher_plot <- function(
     Type = rep("KEGG", length(kg))
   )
   df <- rbind(df, df.tmp)
-  #ggplot(df,aes(x=Description,y=-log(Pvalue),fill=Type)) + geom_bar(stat = "identity",show.legend = TRUE) + coord_flip()
+  # ggplot(df,aes(x=Description,y=-log(Pvalue),fill=Type)) + geom_bar(stat = "identity",show.legend = TRUE) + coord_flip()
   p <- ggplot(
     df,
     aes(-log10(Pvalue), fct_reorder(Description, -log10(Pvalue)))
@@ -692,7 +691,7 @@ enricher_plot <- function(
     ) +
     geom_point(aes(color = Type), size = 5, show.legend = FALSE) +
     scale_color_manual(values = brewer.pal(5, "Dark2")) +
-    facet_grid(Type ~ ., scales = 'free', space = 'free_y', switch = "x") +
+    facet_grid(Type ~ ., scales = "free", space = "free_y", switch = "x") +
     blank +
     ylab("")
   return(p)
@@ -713,17 +712,17 @@ enricher_plot <- function(
 #' @return A combined cowplot drawing object.
 #' @export
 gsea_plot_custorm <- function(gsea_ob, select_term, color, xpos = 3000) {
-  #gsea_ob <- aml_phenolyzer.gsea.crc
-  #select_term <- 1
-  #color <- "#08537C"
+  # gsea_ob <- aml_phenolyzer.gsea.crc
+  # select_term <- 1
+  # color <- "#08537C"
   nes <- round(gsea_ob@result[select_term, "NES"], digits = 2)
   pv <- formatC(
     gsea_ob@result[select_term, "p.adjust"],
     format = "e",
     digits = 2
   )
-  #pv <- round(gsea_ob@result[select_term,"p.adjust"], digits = 6)
-  #pv <- round(gsea_ob@result[select_term,"pvalue"], digits = 6)
+  # pv <- round(gsea_ob@result[select_term,"p.adjust"], digits = 6)
+  # pv <- round(gsea_ob@result[select_term,"pvalue"], digits = 6)
   gs_info <- utils::getFromNamespace("gsInfo", "enrichplot")
   gsdata <- do.call(
     rbind,
@@ -750,7 +749,7 @@ gsea_plot_custorm <- function(gsea_ob, select_term, color, xpos = 3000) {
     ) +
     geom_hline(yintercept = 0, linetype = 2) +
     scale_color_manual(values = color) +
-    #theme(legend.position = c(.95, .95), legend.justification = c("right", "top")) +
+    # theme(legend.position = c(.95, .95), legend.justification = c("right", "top")) +
     theme(axis.ticks.x = element_blank(), axis.text.x = element_blank()) +
     xlab("") +
     ylab("Running enrichment score") +
@@ -761,7 +760,7 @@ gsea_plot_custorm <- function(gsea_ob, select_term, color, xpos = 3000) {
       x = xpos,
       y = ypos - 0.05
     ) +
-    #annotate("text", label = paste0("P value = ", pv), x=xpos,y= ypos -0.05) +
+    # annotate("text", label = paste0("P value = ", pv), x=xpos,y= ypos -0.05) +
     theme(plot.margin = margin(t = 0.2, r = 0.2, b = 0, l = 0.2, unit = "cm"))
 
   p_gsea_2 <- ggplot(gsdata, aes_(x = ~x)) +
@@ -775,7 +774,7 @@ gsea_plot_custorm <- function(gsea_ob, select_term, color, xpos = 3000) {
       ),
       dpi = 300
     ) +
-    #geom_linerange(aes_(ymin = ~ymin, ymax = ~ymax),color=color, show.legend = FALSE,alpha =0.6,size = 0.4) +
+    # geom_linerange(aes_(ymin = ~ymin, ymax = ~ymax),color=color, show.legend = FALSE,alpha =0.6,size = 0.4) +
     blank +
     xlab(NULL) +
     theme(axis.ticks = element_blank(), axis.text = element_blank()) +
@@ -783,16 +782,16 @@ gsea_plot_custorm <- function(gsea_ob, select_term, color, xpos = 3000) {
       panel.border = element_rect(fill = NA, linetype = 1, size = 1),
       axis.line = element_blank()
     ) +
-    #geom_hline(yintercept = 0) +
+    # geom_hline(yintercept = 0) +
     theme(plot.margin = margin(t = -0.5, r = 0.2, b = 0, l = 1.2, unit = "cm"))
 
   p_gsea_3 <- ggplot(gsdata, aes_(x = ~x, y = ~geneList)) +
-    #rasterise(geom_segment(aes_(xend = ~x, yend = 0), color = color, show.legend = FALSE)) +
+    # rasterise(geom_segment(aes_(xend = ~x, yend = 0), color = color, show.legend = FALSE)) +
     rasterise(
       geom_area(color = color, fill = color, show.legend = FALSE),
       dpi = 300
     ) +
-    #geom_area(color = color, fill = color, show.legend = FALSE) +
+    # geom_area(color = color, fill = color, show.legend = FALSE) +
     #  scale_colour_gradient(low= brewer.pal(9,"Blues")[6], high =  brewer.pal(9,"Blues")[9]) +
     ylab("Ranked list matric") +
     xlab("Rank in ordered dataset") +
@@ -814,7 +813,7 @@ gsea_plot_custorm <- function(gsea_ob, select_term, color, xpos = 3000) {
     rel_heights = c(8, 0.8, 4),
     align = "v"
   )
-  #plot_grid(p_gsea_1, p_gsea_2, nrow= 2, rel_heights = c(8,1), align = "v")
+  # plot_grid(p_gsea_1, p_gsea_2, nrow= 2, rel_heights = c(8,1), align = "v")
 
   final_plot <- ggdraw() +
     draw_label(
@@ -834,111 +833,354 @@ gsea_plot_custorm <- function(gsea_ob, select_term, color, xpos = 3000) {
 
 #' Plot selected GSEA pathways as a dot plot
 #'
-#' Selects the most significant pathways from a GSEA result and combines them
-#' with optional user-specified pathways. Point size represents adjusted
-#' P-value significance, while colour represents normalized enrichment score.
+#' Selects pathways from one GSEA result or from multiple group-level results
+#' generated from the same gene-set database. For multiple groups, the union of
+#' independently selected top pathways is displayed on a shared y-axis and the
+#' group names are displayed on the x-axis for direct comparison. When every
+#' selected term has the same uppercase database prefix, such as `HALLMARK_`,
+#' the prefix is moved to the y-axis title and removed from the term labels.
 #'
-#' @param gsea_result A `clusterProfiler` GSEA result object or a data frame
-#'   containing `Description`, `NES`, `pvalue`, and `p.adjust`.
-#' @param top_n Number of pathways with the smallest adjusted P values (or raw
-#'   P values when adjusted P values are unavailable) to include automatically.
-#'   Set to `0` or `NULL` to use only `label_pathways`.
+#' @param gsea_result A `clusterProfiler` GSEA result object, a data frame, or a
+#'   list of group-level results from the same gene-set database. Each result
+#'   must contain `Description`, `NES`, `pvalue`, and `p.adjust`. List names are
+#'   used as group labels; unnamed elements are labelled `Group1`, `Group2`, and
+#'   so on with a warning.
+#' @param top_n Number of pathways selected independently from each group using
+#'   the smallest adjusted P values, or raw P values when adjusted P values are
+#'   all missing. Supply one number for every group, or a named numeric vector
+#'   to set different values for different groups. Set to `0` or `NULL` to use
+#'   only `label_pathways`.
 #' @param label_pathways Optional character vector of pathway descriptions to
-#'   include.
+#'   include. These pathways are placed first and displayed from top to bottom
+#'   in exactly the supplied order. Automatically selected top pathways not
+#'   already listed are appended below them.
+#' @param group_order Optional character vector specifying the left-to-right
+#'   order of groups. The input list order is used by default.
 #'
 #' @return A [ggplot2::ggplot] object.
 #' @export
 plot_gsea_dotplot <- function(
   gsea_result,
   top_n = 20,
-  label_pathways = NULL
+  label_pathways = NULL,
+  group_order = NULL
 ) {
-  gsea_result <- tryCatch(
-    as.data.frame(gsea_result),
-    error = function(e) {
-      stop(
-        "gsea_result must be coercible to a data frame: ",
-        conditionMessage(e)
-      )
-    }
-  )
-
   required_cols <- c("Description", "NES", "pvalue", "p.adjust")
-  missing_cols <- setdiff(required_cols, colnames(gsea_result))
-  if (length(missing_cols) > 0) {
-    stop(
-      "gsea_result is missing required columns: ",
-      paste(missing_cols, collapse = ", ")
-    )
-  }
-
-  if (
-    !is.null(top_n) &&
-      (
-        length(top_n) != 1 ||
-          !is.numeric(top_n) ||
-          is.na(top_n) ||
-          !is.finite(top_n) ||
-          top_n < 0
-      )
-  ) {
-    stop("top_n must be NULL or one non-negative number.")
-  }
-
   label_pathways <- unique(as.character(label_pathways))
   label_pathways <- label_pathways[
     !is.na(label_pathways) & nzchar(label_pathways)
   ]
 
-  if (!is.null(top_n) && top_n > 0) {
-    rank_cols <- intersect(c("p.adjust", "pvalue"), colnames(gsea_result))
-    if (length(rank_cols) > 0) {
-      rank_col <- rank_cols[1]
-      ranked_result <- gsea_result[
-        !is.na(gsea_result[[rank_col]]),
-        ,
-        drop = FALSE
-      ]
-      ranked_result <- ranked_result[
-        order(ranked_result[[rank_col]]),
-        ,
-        drop = FALSE
-      ]
-      top_pathways <- utils::head(
-        ranked_result$Description,
-        n = as.integer(top_n)
-      )
-      label_pathways <- unique(c(label_pathways, top_pathways))
+  coerce_result <- function(x, group_name, allow_skip = FALSE) {
+    result <- tryCatch(
+      as.data.frame(x),
+      error = function(e) {
+        if (allow_skip) {
+          warning(
+            "Ignoring group '", group_name, "': ", conditionMessage(e),
+            call. = FALSE
+          )
+          return(NULL)
+        }
+        stop("gsea_result must be coercible to a data frame: ", conditionMessage(e))
+      }
+    )
+    if (is.null(result)) {
+      return(NULL)
     }
+    missing_cols <- setdiff(required_cols, colnames(result))
+    if (length(missing_cols)) {
+      if (allow_skip) {
+        warning(
+          "Ignoring group '", group_name, "' because it is missing: ",
+          paste(missing_cols, collapse = ", "),
+          call. = FALSE
+        )
+        return(NULL)
+      }
+      stop(
+        "gsea_result is missing required columns: ",
+        paste(missing_cols, collapse = ", ")
+      )
+    }
+    result
   }
 
-  if (length(label_pathways) == 0) {
+  is_result_list <- is.list(gsea_result) && !is.data.frame(gsea_result)
+  if (is_result_list) {
+    result_list <- gsea_result
+    if (!length(result_list)) {
+      stop("gsea_result contains no results.")
+    }
+    group_names <- names(result_list)
+    if (is.null(group_names)) {
+      group_names <- rep("", length(result_list))
+    }
+    blank_names <- is.na(group_names) | !nzchar(group_names)
+    if (any(blank_names)) {
+      warning(
+        "gsea_result has unnamed groups; assigning Group1, Group2, and so on.",
+        call. = FALSE
+      )
+      group_names[blank_names] <- paste0("Group", which(blank_names))
+    }
+    if (anyDuplicated(group_names)) {
+      warning(
+        "gsea_result contains duplicated group names; making them unique.",
+        call. = FALSE
+      )
+      group_names <- make.unique(group_names)
+    }
+    names(result_list) <- group_names
+
+    null_results <- vapply(result_list, is.null, logical(1))
+    if (any(null_results)) {
+      warning(
+        "Ignoring NULL GSEA groups: ",
+        paste(names(result_list)[null_results], collapse = ", "),
+        call. = FALSE
+      )
+      result_list <- result_list[!null_results]
+    }
+    if (!length(result_list)) {
+      stop("gsea_result contains only NULL results.")
+    }
+  } else {
+    result_list <- list(GSEA = gsea_result)
+  }
+
+  group_names <- names(result_list)
+  result_list <- lapply(
+    group_names,
+    function(group_name) {
+      coerce_result(
+        result_list[[group_name]],
+        group_name,
+        allow_skip = is_result_list
+      )
+    }
+  )
+  names(result_list) <- group_names
+  invalid_results <- vapply(result_list, is.null, logical(1))
+  if (any(invalid_results)) {
+    result_list <- result_list[!invalid_results]
+  }
+  if (!length(result_list)) {
+    stop("gsea_result contains no valid GSEA results.")
+  }
+
+  if (!is.null(group_order)) {
+    if (!is.character(group_order) || anyNA(group_order) ||
+      any(!nzchar(group_order)) || anyDuplicated(group_order)) {
+      stop("group_order must contain unique, non-empty group names.")
+    }
+    unknown_groups <- setdiff(group_order, names(result_list))
+    if (length(unknown_groups)) {
+      stop(
+        "group_order contains unknown groups: ",
+        paste(unknown_groups, collapse = ", ")
+      )
+    }
+    omitted_groups <- setdiff(names(result_list), group_order)
+    group_order <- c(group_order, omitted_groups)
+    result_list <- result_list[group_order]
+  }
+  group_names <- names(result_list)
+
+  if (!is.null(top_n)) {
+    if (!is.numeric(top_n) || !length(top_n) || anyNA(top_n) ||
+      any(!is.finite(top_n)) || any(top_n < 0)) {
+      stop("top_n must be NULL or contain non-negative numbers.")
+    }
+    if (length(top_n) == 1L) {
+      top_by_group <- stats::setNames(
+        rep(as.integer(top_n), length(result_list)),
+        group_names
+      )
+    } else if (!is.null(names(top_n)) &&
+      all(group_names %in% names(top_n))) {
+      top_by_group <- as.integer(top_n[group_names])
+      names(top_by_group) <- group_names
+    } else if (length(top_n) == length(result_list)) {
+      top_by_group <- as.integer(top_n)
+      names(top_by_group) <- group_names
+    } else {
+      stop(
+        "top_n must have length 1, match the number of groups, or be named ",
+        "for every group."
+      )
+    }
+  } else {
+    top_by_group <- stats::setNames(rep(0L, length(result_list)), group_names)
+  }
+
+  rank_result <- function(result) {
+    rank_col <- if (any(!is.na(result$p.adjust))) "p.adjust" else "pvalue"
+    ranked_result <- result[
+      !is.na(result[[rank_col]]) & is.finite(result[[rank_col]]), ,
+      drop = FALSE
+    ]
+    ranked_result <- ranked_result[
+      order(ranked_result[[rank_col]], -abs(ranked_result$NES)), ,
+      drop = FALSE
+    ]
+    ranked_result <- ranked_result[
+      !duplicated(as.character(ranked_result$Description)),
+      required_cols,
+      drop = FALSE
+    ]
+    ranked_result
+  }
+
+  ranked_list <- lapply(
+    group_names,
+    function(group_name) {
+      rank_result(result_list[[group_name]])
+    }
+  )
+  names(ranked_list) <- group_names
+  empty_groups <- vapply(ranked_list, nrow, integer(1)) == 0L
+  if (any(empty_groups)) {
+    warning(
+      "Ignoring groups without finite pathway P values: ",
+      paste(group_names[empty_groups], collapse = ", "),
+      call. = FALSE
+    )
+    ranked_list <- ranked_list[!empty_groups]
+    group_names <- group_names[!empty_groups]
+    top_by_group <- top_by_group[group_names]
+  }
+  if (!length(ranked_list)) {
+    stop("No groups contain finite pathway P values.")
+  }
+
+  top_terms <- unlist(
+    lapply(group_names, function(group_name) {
+      utils::head(
+        as.character(ranked_list[[group_name]]$Description),
+        top_by_group[[group_name]]
+      )
+    }),
+    use.names = FALSE
+  )
+  available_terms <- unique(unlist(
+    lapply(ranked_list, function(x) as.character(x$Description)),
+    use.names = FALSE
+  ))
+  missing_labels <- setdiff(label_pathways, available_terms)
+  if (length(missing_labels)) {
+    warning(
+      "label_pathways not found in any group: ",
+      paste(missing_labels, collapse = ", "),
+      call. = FALSE
+    )
+  }
+  ordered_labels <- label_pathways[label_pathways %in% available_terms]
+  pathway_order <- unique(c(ordered_labels, top_terms))
+  if (!length(pathway_order)) {
     stop(
       "No pathways were selected. Use top_n > 0 or provide label_pathways."
     )
   }
 
-  gsea.plot <- gsea_result[
-    gsea_result$Description %in% label_pathways,
-    required_cols,
-    drop = FALSE
-  ]
-  if (nrow(gsea.plot) == 0) {
-    stop("None of label_pathways were found in gsea_result$Description.")
+  has_database_prefix <- grepl("^[A-Z][A-Z0-9]*_", pathway_order)
+  database_prefix <- sub("_.*$", "", pathway_order)
+  common_database <- if (
+    all(has_database_prefix) && length(unique(database_prefix)) == 1L
+  ) {
+    unique(database_prefix)
+  } else {
+    NULL
+  }
+  if (is.null(common_database)) {
+    display_order <- pathway_order
+    pathway_axis_title <- "Pathway"
+  } else {
+    display_order <- sub(
+      paste0("^", common_database, "_+"),
+      "",
+      pathway_order
+    )
+    pathway_axis_title <- paste(common_database, "pathway")
+  }
+  display_term <- stats::setNames(display_order, pathway_order)
+
+  plot_list <- lapply(group_names, function(group_name) {
+    group_result <- ranked_list[[group_name]]
+    group_result <- group_result[
+      as.character(group_result$Description) %in% pathway_order,
+      required_cols,
+      drop = FALSE
+    ]
+    if (!nrow(group_result)) {
+      return(NULL)
+    }
+    group_result$PlotGroup <- group_name
+    group_result
+  })
+  gsea.plot <- do.call(rbind, plot_list)
+  rownames(gsea.plot) <- NULL
+  gsea.plot$Group <- ifelse(gsea.plot$NES < 0, "Down", "Up")
+  gsea.plot$Description <- factor(
+    as.character(gsea.plot$Description),
+    levels = rev(pathway_order)
+  )
+  gsea.plot$DisplayTerm <- factor(
+    unname(display_term[as.character(gsea.plot$Description)]),
+    levels = rev(display_order)
+  )
+  gsea.plot$PlotP <- ifelse(
+    is.na(gsea.plot$p.adjust),
+    gsea.plot$pvalue,
+    gsea.plot$p.adjust
+  )
+  gsea.plot$PlotP <- pmax(gsea.plot$PlotP, .Machine$double.xmin)
+
+  if (length(ranked_list) == 1L) {
+    gsea.plot$PlotGroup <- "GSEA"
+    return(
+      ggplot2::ggplot(
+        gsea.plot,
+        ggplot2::aes(
+          x = .data[["PlotGroup"]],
+          y = .data[["DisplayTerm"]]
+        )
+      ) +
+        ggplot2::geom_point(
+          ggplot2::aes(
+            size = -log10(.data[["PlotP"]]),
+            color = .data[["NES"]]
+          )
+        ) +
+        ggplot2::theme_test() +
+        ggplot2::scale_color_gradient2(
+          low = "#08306B",
+          mid = "grey90",
+          high = "#67000D"
+        ) +
+        ggplot2::labs(
+          x = "GSEA",
+          y = pathway_axis_title,
+          size = "-log10(P)"
+        ) +
+        ggplot2::theme(axis.text.x = ggplot2::element_blank())
+    )
   }
 
-  gsea.plot$Group <- ifelse(gsea.plot$NES < 0, "Down", "Up")
-  gsea.plot$Label <- "GSEA"
+  gsea.plot$PlotGroup <- factor(gsea.plot$PlotGroup, levels = group_names)
 
   ggplot2::ggplot(
     gsea.plot,
     ggplot2::aes(
-      x = Label,
-      y = forcats::fct_reorder(Description, -log10(p.adjust))
+      x = .data[["PlotGroup"]],
+      y = .data[["DisplayTerm"]]
     )
   ) +
     ggplot2::geom_point(
-      ggplot2::aes(size = -log10(p.adjust), color = NES)
+      ggplot2::aes(
+        size = -log10(.data[["PlotP"]]),
+        color = .data[["NES"]]
+      )
     ) +
     ggplot2::theme_test() +
     ggplot2::scale_color_gradient2(
@@ -946,7 +1188,14 @@ plot_gsea_dotplot <- function(
       mid = "grey90",
       high = "#67000D"
     ) +
-    ggplot2::theme(axis.text.x = ggplot2::element_blank())
+    ggplot2::labs(
+      x = "GSEA",
+      y = pathway_axis_title,
+      size = "-log10(P)"
+    ) +
+    ggplot2::theme(
+      axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)
+    )
 }
 
 
@@ -1038,7 +1287,7 @@ GO_BP_treeplot_DESeq2 <- function(deg.df, label, pv = 0.05, lfc = log2(1.5)) {
     reactome = FALSE,
     hallmark = FALSE
   )
-  ##################go_bp
+  ################## go_bp
   ego_bp.up2 <- enrichplot::pairwise_termsim(up.enricher$ego_bp)
   ego_bp.dw2 <- enrichplot::pairwise_termsim(dw.enricher$ego_bp)
   ego_bp.deg2 <- enrichplot::pairwise_termsim(deg.enricher$ego_bp)
@@ -1056,11 +1305,11 @@ GO_BP_treeplot_DESeq2 <- function(deg.df, label, pv = 0.05, lfc = log2(1.5)) {
     ) +
     ggtitle(
       label = paste0(
-        'Up-regulated Genes in GO_BP (',
+        "Up-regulated Genes in GO_BP (",
         label,
-        ' n= ',
+        " n= ",
         length(up.entrez),
-        ')'
+        ")"
       )
     )
   p_dw_bp <- enrichplot::treeplot(
@@ -1076,11 +1325,11 @@ GO_BP_treeplot_DESeq2 <- function(deg.df, label, pv = 0.05, lfc = log2(1.5)) {
     ) +
     ggtitle(
       label = paste0(
-        'Down-regulated Genes in GO_BP (',
+        "Down-regulated Genes in GO_BP (",
         label,
-        ' n= ',
+        " n= ",
         length(dw.entrez),
-        ')'
+        ")"
       )
     )
   p_deg_bp <- enrichplot::treeplot(
@@ -1096,14 +1345,14 @@ GO_BP_treeplot_DESeq2 <- function(deg.df, label, pv = 0.05, lfc = log2(1.5)) {
     ) +
     ggtitle(
       label = paste0(
-        'Diff. Expr. Genes in GO_BP (',
+        "Diff. Expr. Genes in GO_BP (",
         label,
-        ' n= ',
+        " n= ",
         length(deg.entrez),
-        ')'
+        ")"
       )
     )
-  ##################kegg
+  ################## kegg
   ekg.up2 <- enrichplot::pairwise_termsim(up.enricher$ekg)
   ekg.dw2 <- enrichplot::pairwise_termsim(dw.enricher$ekg)
   ekg.deg2 <- enrichplot::pairwise_termsim(deg.enricher$ekg)
@@ -1121,11 +1370,11 @@ GO_BP_treeplot_DESeq2 <- function(deg.df, label, pv = 0.05, lfc = log2(1.5)) {
     ) +
     ggtitle(
       label = paste0(
-        'Up-regulated Genes in KEGG pathway (',
+        "Up-regulated Genes in KEGG pathway (",
         label,
-        ' n= ',
+        " n= ",
         length(up.entrez),
-        ')'
+        ")"
       )
     )
   p_dw_kegg <- enrichplot::treeplot(
@@ -1141,11 +1390,11 @@ GO_BP_treeplot_DESeq2 <- function(deg.df, label, pv = 0.05, lfc = log2(1.5)) {
     ) +
     ggtitle(
       label = paste0(
-        'Down-regulated Genes in KEGG pathway (',
+        "Down-regulated Genes in KEGG pathway (",
         label,
-        ' n= ',
+        " n= ",
         length(dw.entrez),
-        ')'
+        ")"
       )
     )
   p_deg_kegg <- enrichplot::treeplot(
@@ -1161,11 +1410,11 @@ GO_BP_treeplot_DESeq2 <- function(deg.df, label, pv = 0.05, lfc = log2(1.5)) {
     ) +
     ggtitle(
       label = paste0(
-        'Diff. Expr. Genes in KEGG pathway (',
+        "Diff. Expr. Genes in KEGG pathway (",
         label,
-        ' n= ',
+        " n= ",
         length(deg.entrez),
-        ')'
+        ")"
       )
     )
 
@@ -1174,31 +1423,31 @@ GO_BP_treeplot_DESeq2 <- function(deg.df, label, pv = 0.05, lfc = log2(1.5)) {
   p_combind_up <- enricher_plot(up.enricher) +
     ggtitle(
       label = paste0(
-        'Up-regulated Genes Enrichment Analysis(',
+        "Up-regulated Genes Enrichment Analysis(",
         label,
-        ' n= ',
+        " n= ",
         length(up.entrez),
-        ')'
+        ")"
       )
     )
   p_combind_dw <- enricher_plot(dw.enricher) +
     ggtitle(
       label = paste0(
-        'Down-regulated Genes Enrichment Analysis(',
+        "Down-regulated Genes Enrichment Analysis(",
         label,
-        ' n= ',
+        " n= ",
         length(dw.entrez),
-        ')'
+        ")"
       )
     )
   p_combind_deg <- enricher_plot(deg.enricher) +
     ggtitle(
       label = paste0(
-        'Diff. Expr. Genes Enrichment Analysis(',
+        "Diff. Expr. Genes Enrichment Analysis(",
         label,
-        ' n= ',
+        " n= ",
         length(deg.entrez),
-        ')'
+        ")"
       )
     )
 
@@ -1273,7 +1522,7 @@ GO_BP_treeplot_scRNAseq <- function(deg.df, label, pv = 0.05, lfc = 0.25) {
     reactome = FALSE,
     hallmark = FALSE
   )
-  ##################go_bp
+  ################## go_bp
   ego_bp.up2 <- enrichplot::pairwise_termsim(up.enricher$ego_bp)
   ego_bp.dw2 <- enrichplot::pairwise_termsim(dw.enricher$ego_bp)
   p_up_bp <- enrichplot::treeplot(
@@ -1289,11 +1538,11 @@ GO_BP_treeplot_scRNAseq <- function(deg.df, label, pv = 0.05, lfc = 0.25) {
     ) +
     ggtitle(
       label = paste0(
-        'Up-regulated Genes in GO_BP (',
+        "Up-regulated Genes in GO_BP (",
         label,
-        ' n= ',
+        " n= ",
         length(up.entrez),
-        ')'
+        ")"
       )
     )
   p_dw_bp <- enrichplot::treeplot(
@@ -1309,14 +1558,14 @@ GO_BP_treeplot_scRNAseq <- function(deg.df, label, pv = 0.05, lfc = 0.25) {
     ) +
     ggtitle(
       label = paste0(
-        'Down-regulated Genes in GO_BP (',
+        "Down-regulated Genes in GO_BP (",
         label,
-        ' n= ',
+        " n= ",
         length(dw.entrez),
-        ')'
+        ")"
       )
     )
-  ##################kegg
+  ################## kegg
   ekg.up2 <- enrichplot::pairwise_termsim(up.enricher$ekg)
   ekg.dw2 <- enrichplot::pairwise_termsim(dw.enricher$ekg)
   p_up_kegg <- enrichplot::treeplot(
@@ -1332,11 +1581,11 @@ GO_BP_treeplot_scRNAseq <- function(deg.df, label, pv = 0.05, lfc = 0.25) {
     ) +
     ggtitle(
       label = paste0(
-        'Up-regulated Genes in KEGG pathway (',
+        "Up-regulated Genes in KEGG pathway (",
         label,
-        ' n= ',
+        " n= ",
         length(up.entrez),
-        ')'
+        ")"
       )
     )
   p_dw_kegg <- enrichplot::treeplot(
@@ -1352,11 +1601,11 @@ GO_BP_treeplot_scRNAseq <- function(deg.df, label, pv = 0.05, lfc = 0.25) {
     ) +
     ggtitle(
       label = paste0(
-        'Down-regulated Genes in KEGG pathway (',
+        "Down-regulated Genes in KEGG pathway (",
         label,
-        ' n= ',
+        " n= ",
         length(dw.entrez),
-        ')'
+        ")"
       )
     )
   ###################
@@ -1364,21 +1613,21 @@ GO_BP_treeplot_scRNAseq <- function(deg.df, label, pv = 0.05, lfc = 0.25) {
   p_combind_up <- enricher_plot(up.enricher) +
     ggtitle(
       label = paste0(
-        'Up-regulated Genes Enrichment Analysis(',
+        "Up-regulated Genes Enrichment Analysis(",
         label,
-        ' n= ',
+        " n= ",
         length(up.entrez),
-        ')'
+        ")"
       )
     )
   p_combind_dw <- enricher_plot(dw.enricher) +
     ggtitle(
       label = paste0(
-        'Down-regulated Genes Enrichment Analysis(',
+        "Down-regulated Genes Enrichment Analysis(",
         label,
-        ' n= ',
+        " n= ",
         length(dw.entrez),
-        ')'
+        ")"
       )
     )
   plot.ls <- list()
