@@ -329,12 +329,11 @@ enrich_combind <- function(
 #'
 #' - `MH`: mouse-ortholog Hallmark gene sets; a useful first-pass overview.
 #' - `M1`: genes grouped by mouse chromosome cytogenetic bands.
-#' - `M2`, `M2:CGP`, `M2:CP`: mouse-native curated sets, perturbation
-#'   signatures, or canonical pathways.
+#' - `M2`, `M2:CGP`: mouse-native curated sets or perturbation signatures.
 #' - `M2:CP:BIOCARTA`, `M2:CP:REACTOME`, `M2:CP:WIKIPATHWAYS`: mouse canonical
 #'   pathway subcollections. Mouse MSigDB does not provide the human KEGG or PID
 #'   subcollections listed above.
-#' - `M3`, `M3:MIR:MIRDB`, `M3:TFT:GTRD`: predicted mouse microRNA or
+#' - `M3`, `M3:MIRDB`, `M3:GTRD`: predicted mouse microRNA or
 #'   transcription-factor targets.
 #' - `M5`, `M5:GO:BP`, `M5:GO:CC`, `M5:GO:MF`: mouse Gene Ontology sets.
 #' - `M5:MPT`: cancer-related terms from the Mammalian Phenotype Ontology.
@@ -354,6 +353,96 @@ enrich_combind <- function(
 #'   `NULL` is returned. For multiple databases, a named list is returned and
 #'   failed or empty analyses are represented by `NULL` entries.
 #' @export
+.abel_msigdb_database_map <- function(species) {
+  species <- .abel_normalize_species(species)
+
+  if (species == "human") {
+    return(list(
+      H = c("H", NA_character_),
+      C1 = c("C1", NA_character_),
+      C2 = c("C2", NA_character_),
+      "C2:CGP" = c("C2", "CGP"),
+      "C2:CP" = c("C2", "CP"),
+      "C2:CP:BIOCARTA" = c("C2", "CP:BIOCARTA"),
+      "C2:CP:KEGG_LEGACY" = c("C2", "CP:KEGG_LEGACY"),
+      "C2:CP:KEGG_MEDICUS" = c("C2", "CP:KEGG_MEDICUS"),
+      "C2:CP:PID" = c("C2", "CP:PID"),
+      "C2:CP:REACTOME" = c("C2", "CP:REACTOME"),
+      "C2:CP:WIKIPATHWAYS" = c("C2", "CP:WIKIPATHWAYS"),
+      C3 = c("C3", NA_character_),
+      "C3:MIR:MIRDB" = c("C3", "MIR:MIRDB"),
+      "C3:MIR:MIR_LEGACY" = c("C3", "MIR:MIR_LEGACY"),
+      "C3:TFT:GTRD" = c("C3", "TFT:GTRD"),
+      "C3:TFT:TFT_LEGACY" = c("C3", "TFT:TFT_LEGACY"),
+      C4 = c("C4", NA_character_),
+      "C4:3CA" = c("C4", "3CA"),
+      "C4:CGN" = c("C4", "CGN"),
+      "C4:CM" = c("C4", "CM"),
+      C5 = c("C5", NA_character_),
+      "C5:GO:BP" = c("C5", "GO:BP"),
+      "C5:GO:CC" = c("C5", "GO:CC"),
+      "C5:GO:MF" = c("C5", "GO:MF"),
+      "C5:HPO" = c("C5", "HPO"),
+      C6 = c("C6", NA_character_),
+      C7 = c("C7", NA_character_),
+      "C7:IMMUNESIGDB" = c("C7", "IMMUNESIGDB"),
+      "C7:VAX" = c("C7", "VAX"),
+      C8 = c("C8", NA_character_),
+      C9 = c("C9", NA_character_)
+    ))
+  }
+
+  list(
+    MH = c("MH", NA_character_),
+    M1 = c("M1", NA_character_),
+    M2 = c("M2", NA_character_),
+    "M2:CGP" = c("M2", "CGP"),
+    "M2:CP:BIOCARTA" = c("M2", "CP:BIOCARTA"),
+    "M2:CP:REACTOME" = c("M2", "CP:REACTOME"),
+    "M2:CP:WIKIPATHWAYS" = c("M2", "CP:WIKIPATHWAYS"),
+    M3 = c("M3", NA_character_),
+    "M3:MIRDB" = c("M3", "MIRDB"),
+    "M3:GTRD" = c("M3", "GTRD"),
+    M5 = c("M5", NA_character_),
+    "M5:GO:BP" = c("M5", "GO:BP"),
+    "M5:GO:CC" = c("M5", "GO:CC"),
+    "M5:GO:MF" = c("M5", "GO:MF"),
+    "M5:MPT" = c("M5", "MPT"),
+    M7 = c("M7", NA_character_),
+    M8 = c("M8", NA_character_)
+  )
+}
+
+.abel_match_msigdb_database <- function(database, species) {
+  species <- .abel_normalize_species(species)
+  db_map <- .abel_msigdb_database_map(species)
+  database <- toupper(trimws(as.character(database)))
+  if (length(database) != 1L || is.na(database) || !nzchar(database)) {
+    return(NA_character_)
+  }
+  if (database %in% names(db_map)) {
+    return(database)
+  }
+
+  if (species == "mouse") {
+    legacy_aliases <- c(
+      "M2:CP" = "M2",
+      "M3:MIR:MIRDB" = "M3:MIRDB",
+      "M3:TFT:GTRD" = "M3:GTRD"
+    )
+    if (database %in% names(legacy_aliases)) {
+      return(unname(legacy_aliases[[database]]))
+    }
+  }
+
+  underscore_names <- gsub(":", "_", names(db_map), fixed = TRUE)
+  match_index <- which(underscore_names == database)
+  if (length(match_index) == 1L) {
+    return(names(db_map)[match_index])
+  }
+  NA_character_
+}
+
 EnrichMSigDB <- function(
   gene,
   database = NULL,
@@ -372,60 +461,7 @@ EnrichMSigDB <- function(
     mouse = "Mus musculus"
   )
   db_species <- if (species == "human") "HS" else "MM"
-  human_db_map <- list(
-    H = c("H", NA_character_),
-    C1 = c("C1", NA_character_),
-    C2 = c("C2", NA_character_),
-    "C2:CGP" = c("C2", "CGP"),
-    "C2:CP" = c("C2", "CP"),
-    "C2:CP:BIOCARTA" = c("C2", "CP:BIOCARTA"),
-    "C2:CP:KEGG_LEGACY" = c("C2", "CP:KEGG_LEGACY"),
-    "C2:CP:KEGG_MEDICUS" = c("C2", "CP:KEGG_MEDICUS"),
-    "C2:CP:PID" = c("C2", "CP:PID"),
-    "C2:CP:REACTOME" = c("C2", "CP:REACTOME"),
-    "C2:CP:WIKIPATHWAYS" = c("C2", "CP:WIKIPATHWAYS"),
-    C3 = c("C3", NA_character_),
-    "C3:MIR:MIRDB" = c("C3", "MIR:MIRDB"),
-    "C3:MIR:MIR_LEGACY" = c("C3", "MIR:MIR_LEGACY"),
-    "C3:TFT:GTRD" = c("C3", "TFT:GTRD"),
-    "C3:TFT:TFT_LEGACY" = c("C3", "TFT:TFT_LEGACY"),
-    C4 = c("C4", NA_character_),
-    "C4:3CA" = c("C4", "3CA"),
-    "C4:CGN" = c("C4", "CGN"),
-    "C4:CM" = c("C4", "CM"),
-    C5 = c("C5", NA_character_),
-    "C5:GO:BP" = c("C5", "GO:BP"),
-    "C5:GO:CC" = c("C5", "GO:CC"),
-    "C5:GO:MF" = c("C5", "GO:MF"),
-    "C5:HPO" = c("C5", "HPO"),
-    C6 = c("C6", NA_character_),
-    C7 = c("C7", NA_character_),
-    "C7:IMMUNESIGDB" = c("C7", "IMMUNESIGDB"),
-    "C7:VAX" = c("C7", "VAX"),
-    C8 = c("C8", NA_character_),
-    C9 = c("C9", NA_character_)
-  )
-  mouse_db_map <- list(
-    MH = c("MH", NA_character_),
-    M1 = c("M1", NA_character_),
-    M2 = c("M2", NA_character_),
-    "M2:CGP" = c("M2", "CGP"),
-    "M2:CP" = c("M2", "CP"),
-    "M2:CP:BIOCARTA" = c("M2", "CP:BIOCARTA"),
-    "M2:CP:REACTOME" = c("M2", "CP:REACTOME"),
-    "M2:CP:WIKIPATHWAYS" = c("M2", "CP:WIKIPATHWAYS"),
-    M3 = c("M3", NA_character_),
-    "M3:MIR:MIRDB" = c("M3", "MIR:MIRDB"),
-    "M3:TFT:GTRD" = c("M3", "TFT:GTRD"),
-    M5 = c("M5", NA_character_),
-    "M5:GO:BP" = c("M5", "GO:BP"),
-    "M5:GO:CC" = c("M5", "GO:CC"),
-    "M5:GO:MF" = c("M5", "GO:MF"),
-    "M5:MPT" = c("M5", "MPT"),
-    M7 = c("M7", NA_character_),
-    M8 = c("M8", NA_character_)
-  )
-  db_map <- if (species == "human") human_db_map else mouse_db_map
+  db_map <- .abel_msigdb_database_map(species)
 
   if (is.null(database)) {
     database <- if (species == "human") "H" else "MH"
@@ -433,8 +469,15 @@ EnrichMSigDB <- function(
   if (!is.character(database) || !length(database) || anyNA(database)) {
     stop("database must contain at least one supported database name.")
   }
-  database <- toupper(database)
-  unsupported <- setdiff(database, names(db_map))
+  database <- toupper(trimws(database))
+  resolved_database <- vapply(
+    database,
+    .abel_match_msigdb_database,
+    character(1),
+    species = species,
+    USE.NAMES = FALSE
+  )
+  unsupported <- database[is.na(resolved_database) | !nzchar(resolved_database)]
   if (length(unsupported)) {
     stop(
       "Unsupported ", species, " database: ",
@@ -443,6 +486,7 @@ EnrichMSigDB <- function(
       paste(names(db_map), collapse = ", ")
     )
   }
+  database <- resolved_database
 
   gene <- unique(as.character(gene))
   gene <- gene[!is.na(gene) & nzchar(gene)]
@@ -1653,17 +1697,21 @@ GO_BP_treeplot_scRNAseq <- function(deg.df, label, pv = 0.05, lfc = 0.25) {
 #' Run configurable gene-set enrichment analysis
 #'
 #' Builds a ranked Entrez gene vector from common bulk or single-cell DEG
-#' layouts and runs selected Hallmark, GO, KEGG, Reactome, or MSigDB gene-set
-#' enrichment analyses for human or mouse.
+#' layouts and runs GSEA against any supported human or mouse MSigDB collection,
+#' as well as the native GO and KEGG functions from `clusterProfiler`.
 #'
 #' @param deg.df Differential-expression data frame.
 #' @param species Species name or code for gene annotation and gene sets.
 #' @param rank_by Ranking preset (`"log2FC"`, `"stat"`, `"signed_p"`,
 #'   `"signed_padj"`, `"log2FC_p"`, or `"log2FC_padj"`) or the name of a
 #'   numeric column.
-#' @param dbs Character vector of databases to run, for example `"Hallmark"`,
-#'   `"GO_BP"`, `"GO_CC"`, `"GO_MF"`, `"GO_ALL"`, `"KEGG"`, or
-#'   `"Reactome"`.
+#' @param dbs Character vector of databases to run. In addition to `"GO_BP"`,
+#'   `"GO_CC"`, `"GO_MF"`, `"GO_ALL"`, `"KEGG"`, and `"Reactome"`, this accepts
+#'   every database name supported by [EnrichMSigDB()], such as `"H"`, `"C1"`,
+#'   `"C2:CP:REACTOME"`, `"C5:GO:BP"`, `"C7"`, `"MH"`, `"M2:CP:REACTOME"`,
+#'   or `"M5:GO:BP"`. Use `"MSIGDB_ALL"` to run every MSigDB database available
+#'   for the selected species. `"Hallmark"` selects `H` for human and `MH` for
+#'   mouse.
 #' @param gene_id_col Column containing Entrez identifiers. When it is `Entrez`
 #'   and absent, a `Symbol` column is converted automatically.
 #' @param log2fc_col Optional log2 fold-change column; common names are detected
@@ -1717,27 +1765,26 @@ GSEA_analysis <- function(
   }
 
   ## 1. species setting
-  species_lower <- tolower(species)
+  species <- .abel_normalize_species(species)
 
-  if (species_lower %in% c("human", "homo sapiens", "hsa")) {
+  if (species == "human") {
     if (!requireNamespace("org.Hs.eg.db", quietly = TRUE)) {
       stop("Package not installed: org.Hs.eg.db")
     }
     msig_species <- "Homo sapiens"
+    db_species <- "HS"
     kegg_org <- "hsa"
     current_OrgDb <- org.Hs.eg.db::org.Hs.eg.db
-  } else if (species_lower %in% c("mouse", "mus musculus", "mmu")) {
+  } else {
     if (!requireNamespace("org.Mm.eg.db", quietly = TRUE)) {
       stop("Package not installed: org.Mm.eg.db")
     }
     msig_species <- "Mus musculus"
+    db_species <- "MM"
     kegg_org <- "mmu"
     current_OrgDb <- org.Mm.eg.db::org.Mm.eg.db
-  } else {
-    stop(
-      "species must be one of: human, Homo sapiens, hsa, mouse, Mus musculus, mmu"
-    )
   }
+  msigdb_map <- .abel_msigdb_database_map(species)
 
   ## 2. automatically detect common column names
   available_cols <- colnames(deg.df)
@@ -1921,30 +1968,30 @@ GSEA_analysis <- function(
 
   ## 5. helper functions
   get_msig_t2g <- function(collection, subcollection = NULL) {
-    args_new <- list(
-      species = msig_species,
-      collection = collection
-    )
-    if (!is.null(subcollection)) {
-      args_new$subcollection <- subcollection
+    msigdbr_args <- names(formals(msigdbr::msigdbr))
+    if (species == "mouse" && !"db_species" %in% msigdbr_args) {
+      stop(
+        "Native Mouse MSigDB requires msigdbr >= 10.0.0. ",
+        "Please update the 'msigdbr' package."
+      )
     }
 
-    m <- try(
-      do.call(msigdbr::msigdbr, args_new),
-      silent = TRUE
-    )
-
-    if (inherits(m, "try-error")) {
-      args_old <- list(
+    if ("collection" %in% msigdbr_args) {
+      args <- list(
+        db_species = db_species,
         species = msig_species,
-        category = collection
+        collection = collection
       )
       if (!is.null(subcollection)) {
-        args_old$subcategory <- subcollection
+        args$subcollection <- subcollection
       }
-
-      m <- do.call(msigdbr::msigdbr, args_old)
+    } else {
+      args <- list(species = msig_species, category = collection)
+      if (!is.null(subcollection)) {
+        args$subcategory <- subcollection
+      }
     }
+    m <- do.call(msigdbr::msigdbr, args)
 
     gene_col <- NULL
     if ("entrez_gene" %in% colnames(m)) {
@@ -2008,15 +2055,59 @@ GSEA_analysis <- function(
     return(res)
   }
 
+  run_msigdb_gsea <- function(database, label = database) {
+    database_info <- msigdb_map[[database]]
+    collection <- unname(database_info[1])
+    subcollection <- unname(database_info[2])
+    if (is.na(subcollection)) {
+      subcollection <- NULL
+    }
+
+    t2g <- safe_run(paste0(label, " MSigDB loading"), function() {
+      get_msig_t2g(collection, subcollection)
+    })
+    if (is.null(t2g)) {
+      return(NULL)
+    }
+    run_t2g_gsea(label, t2g)
+  }
+
   ## 6. run selected databases
   result <- list()
 
+  if (!is.character(dbs) || !length(dbs) || anyNA(dbs) ||
+    any(!nzchar(trimws(dbs)))) {
+    stop("dbs must contain at least one non-empty database name.")
+  }
+  dbs <- unlist(lapply(dbs, function(db) {
+    if (toupper(trimws(db)) %in% c("MSIGDB_ALL", "ALL_MSIGDB")) {
+      names(msigdb_map)
+    } else {
+      db
+    }
+  }), use.names = FALSE)
+
   for (db in dbs) {
+    db <- trimws(db)
     db_key <- toupper(gsub("[ .-]", "_", db))
 
-    if (db_key %in% c("H", "HALLMARK", "MSIGDB_H")) {
-      t2g <- get_msig_t2g(collection = "H")
-      result[["Hallmark"]] <- run_t2g_gsea("Hallmark", t2g)
+    if (db_key == "HALLMARK") {
+      hallmark_db <- if (species == "human") "H" else "MH"
+      result[["Hallmark"]] <- run_msigdb_gsea(hallmark_db, "Hallmark")
+    } else if (db_key %in% c("H", "MSIGDB_H")) {
+      if (species != "human") {
+        warning("H is only available for species = 'human'.", call. = FALSE)
+      } else {
+        output_name <- if (db_key == "H") "H" else "Hallmark"
+        result[[output_name]] <- run_msigdb_gsea("H", output_name)
+      }
+    } else if (db_key %in% c("MH", "MOUSE_HALLMARK", "MSIGDB_MH")) {
+      if (species != "mouse") {
+        warning("MH is only available for species = 'mouse'.", call. = FALSE)
+      } else {
+        output_name <- if (db_key == "MH") "MH" else "Hallmark"
+        result[[output_name]] <- run_msigdb_gsea("MH", output_name)
+      }
     } else if (db_key %in% c("GO_BP", "BP")) {
       res <- safe_run("GO_BP", function() {
         clusterProfiler::gseGO(
@@ -2101,30 +2192,57 @@ GSEA_analysis <- function(
 
         result[["KEGG"]] <- make_readable(res, "KEGG")
       } else {
-        t2g <- get_msig_t2g(
-          collection = "C2",
-          subcollection = "CP:KEGG"
-        )
-        result[["KEGG_msigdb"]] <- run_t2g_gsea("KEGG_msigdb", t2g)
+        if (species == "human") {
+          result[["KEGG_msigdb"]] <- run_msigdb_gsea(
+            "C2:CP:KEGG_LEGACY",
+            "KEGG_msigdb"
+          )
+        } else {
+          warning(
+            "Native Mouse MSigDB does not provide KEGG; use ",
+            "kegg_source = 'clusterProfiler'.",
+            call. = FALSE
+          )
+        }
       }
     } else if (db_key %in% c("REACTOME", "C2_CP_REACTOME", "MSIGDB_REACTOME")) {
-      t2g <- get_msig_t2g(
-        collection = "C2",
-        subcollection = "CP:REACTOME"
-      )
-      result[["Reactome"]] <- run_t2g_gsea("Reactome", t2g)
+      reactome_db <- if (species == "human") {
+        "C2:CP:REACTOME"
+      } else {
+        "M2:CP:REACTOME"
+      }
+      result[["Reactome"]] <- run_msigdb_gsea(reactome_db, "Reactome")
     } else if (db_key %in% c("C2_CP_KEGG", "MSIGDB_KEGG")) {
-      t2g <- get_msig_t2g(
-        collection = "C2",
-        subcollection = "CP:KEGG"
-      )
-      result[["KEGG_msigdb"]] <- run_t2g_gsea("KEGG_msigdb", t2g)
+      if (species == "human") {
+        result[["KEGG_msigdb"]] <- run_msigdb_gsea(
+          "C2:CP:KEGG_LEGACY",
+          "KEGG_msigdb"
+        )
+      } else {
+        warning(
+          "Native Mouse MSigDB does not provide KEGG collections.",
+          call. = FALSE
+        )
+      }
     } else {
-      warning(
-        "Unknown database: ",
-        db,
-        ". Allowed examples: Hallmark, GO_BP, GO_CC, GO_MF, GO_ALL, KEGG, Reactome, C2_CP_KEGG"
-      )
+      msigdb_database <- .abel_match_msigdb_database(db, species)
+      if (!is.na(msigdb_database)) {
+        result[[msigdb_database]] <- run_msigdb_gsea(
+          msigdb_database,
+          msigdb_database
+        )
+      } else {
+        warning(
+          "Unknown database for species '",
+          species,
+          "': ",
+          db,
+          ". Supported MSigDB databases: ",
+          paste(names(msigdb_map), collapse = ", "),
+          ". Additional options: GO_BP, GO_CC, GO_MF, GO_ALL, KEGG, Reactome, MSIGDB_ALL.",
+          call. = FALSE
+        )
+      }
     }
   }
 

@@ -154,7 +154,7 @@ Source: `R/enrichment.R`
 | `go_plot_custom()` | Draw a customized GO enrichment plot for selected terms. |
 | `GO_BP_treeplot_DESeq2()` | Run and visualize enrichment analyses separately for upregulated and downregulated DESeq2 genes. |
 | `GO_BP_treeplot_scRNAseq()` | Run and visualize enrichment analyses separately for upregulated and downregulated single-cell markers. |
-| `GSEA_analysis()` | Run configurable species-aware GSEA using multiple ranking metrics and gene-set databases. |
+| `GSEA_analysis()` | Run species-aware GSEA with configurable ranking metrics and all supported human or native mouse MSigDB collections. |
 
 ### Correlation analysis
 

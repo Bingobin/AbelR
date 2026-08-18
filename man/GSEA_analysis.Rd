@@ -34,9 +34,13 @@ GSEA_analysis(
 \code{"signed_padj"}, \code{"log2FC_p"}, or \code{"log2FC_padj"}) or the name of a
 numeric column.}
 
-\item{dbs}{Character vector of databases to run, for example \code{"Hallmark"},
-\code{"GO_BP"}, \code{"GO_CC"}, \code{"GO_MF"}, \code{"GO_ALL"}, \code{"KEGG"}, or
-\code{"Reactome"}.}
+\item{dbs}{Character vector of databases to run. In addition to \code{"GO_BP"},
+\code{"GO_CC"}, \code{"GO_MF"}, \code{"GO_ALL"}, \code{"KEGG"}, and \code{"Reactome"}, this accepts
+every database name supported by \code{\link[=EnrichMSigDB]{EnrichMSigDB()}}, such as \code{"H"}, \code{"C1"},
+\code{"C2:CP:REACTOME"}, \code{"C5:GO:BP"}, \code{"C7"}, \code{"MH"}, \code{"M2:CP:REACTOME"},
+or \code{"M5:GO:BP"}. Use \code{"MSIGDB_ALL"} to run every MSigDB database available
+for the selected species. \code{"Hallmark"} selects \code{H} for human and \code{MH} for
+mouse.}
 
 \item{gene_id_col}{Column containing Entrez identifiers. When it is \code{Entrez}
 and absent, a \code{Symbol} column is converted automatically.}
@@ -73,6 +77,6 @@ A named list of requested GSEA result objects plus \code{geneList} and
 }
 \description{
 Builds a ranked Entrez gene vector from common bulk or single-cell DEG
-layouts and runs selected Hallmark, GO, KEGG, Reactome, or MSigDB gene-set
-enrichment analyses for human or mouse.
+layouts and runs GSEA against any supported human or mouse MSigDB collection,
+as well as the native GO and KEGG functions from \code{clusterProfiler}.
 }

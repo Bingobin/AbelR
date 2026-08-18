@@ -86,12 +86,11 @@ dependency and CCLE expression profiles.
 \itemize{
 \item \code{MH}: mouse-ortholog Hallmark gene sets; a useful first-pass overview.
 \item \code{M1}: genes grouped by mouse chromosome cytogenetic bands.
-\item \code{M2}, \code{M2:CGP}, \code{M2:CP}: mouse-native curated sets, perturbation
-signatures, or canonical pathways.
+\item \code{M2}, \code{M2:CGP}: mouse-native curated sets or perturbation signatures.
 \item \code{M2:CP:BIOCARTA}, \code{M2:CP:REACTOME}, \code{M2:CP:WIKIPATHWAYS}: mouse canonical
 pathway subcollections. Mouse MSigDB does not provide the human KEGG or PID
 subcollections listed above.
-\item \code{M3}, \code{M3:MIR:MIRDB}, \code{M3:TFT:GTRD}: predicted mouse microRNA or
+\item \code{M3}, \code{M3:MIRDB}, \code{M3:GTRD}: predicted mouse microRNA or
 transcription-factor targets.
 \item \code{M5}, \code{M5:GO:BP}, \code{M5:GO:CC}, \code{M5:GO:MF}: mouse Gene Ontology sets.
 \item \code{M5:MPT}: cancer-related terms from the Mammalian Phenotype Ontology.

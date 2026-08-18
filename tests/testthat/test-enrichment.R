@@ -32,6 +32,38 @@ test_that("EnrichMSigDB validates gene and enrichment parameters", {
   )
 })
 
+test_that("MSigDB database maps cover human and native mouse collections", {
+  human_map <- .abel_msigdb_database_map("human")
+  mouse_map <- .abel_msigdb_database_map("mouse")
+
+  expect_true(all(c(
+    "H", "C1", "C2", "C2:CP:REACTOME", "C3:TFT:GTRD",
+    "C4", "C5:GO:BP", "C6", "C7", "C8", "C9"
+  ) %in% names(human_map)))
+  expect_true(all(c(
+    "MH", "M1", "M2", "M2:CP:REACTOME", "M3:MIRDB",
+    "M3:GTRD", "M5:GO:BP", "M7", "M8"
+  ) %in% names(mouse_map)))
+  expect_false("H" %in% names(mouse_map))
+  expect_false("MH" %in% names(human_map))
+})
+
+test_that("MSigDB database names accept colon, underscore, and legacy forms", {
+  expect_equal(
+    .abel_match_msigdb_database("c2:cp:reactome", "human"),
+    "C2:CP:REACTOME"
+  )
+  expect_equal(
+    .abel_match_msigdb_database("C2_CP_REACTOME", "human"),
+    "C2:CP:REACTOME"
+  )
+  expect_equal(
+    .abel_match_msigdb_database("M3:MIR:MIRDB", "mouse"),
+    "M3:MIRDB"
+  )
+  expect_true(is.na(.abel_match_msigdb_database("H", "mouse")))
+})
+
 make_gsea_result <- function(prefix, p_adjust) {
   data.frame(
     Description = paste0(prefix, seq_along(p_adjust)),
