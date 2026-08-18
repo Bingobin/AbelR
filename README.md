@@ -150,7 +150,7 @@ Source: `R/enrichment.R`
 | `enrich_combind()` | Unified GO analysis with optional KEGG, Reactome, Hallmark, and WikiPathways results. |
 | `enricher_plot()` | Combine selected enrichment categories into a summary visualization. |
 | `gsea_plot_custorm()` | Build a customized GSEA running-score plot for selected terms. |
-| `plot_gsea_dotplot()` | Plot selected or top-ranked GSEA pathways using adjusted P-value significance and normalized enrichment scores. |
+| `plot_gsea_summary()` | Compare selected GSEA pathways across groups using a dot plot, NES heatmap, and matched result table. |
 | `go_plot_custom()` | Draw a customized GO enrichment plot for selected terms. |
 | `GO_BP_treeplot_DESeq2()` | Run and visualize enrichment analyses separately for upregulated and downregulated DESeq2 genes. |
 | `GO_BP_treeplot_scRNAseq()` | Run and visualize enrichment analyses separately for upregulated and downregulated single-cell markers. |

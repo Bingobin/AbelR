@@ -37,8 +37,8 @@ numeric column.}
 \item{dbs}{Character vector of databases to run. In addition to \code{"GO_BP"},
 \code{"GO_CC"}, \code{"GO_MF"}, \code{"GO_ALL"}, \code{"KEGG"}, and \code{"Reactome"}, this accepts
 every database name supported by \code{\link[=EnrichMSigDB]{EnrichMSigDB()}}, such as \code{"H"}, \code{"C1"},
-\code{"C2:CP:REACTOME"}, \code{"C5:GO:BP"}, \code{"C7"}, \code{"MH"}, \code{"M2:CP:REACTOME"},
-or \code{"M5:GO:BP"}. Use \code{"MSIGDB_ALL"} to run every MSigDB database available
+\code{"C2_CP_REACTOME"}, \code{"C5_GO_BP"}, \code{"C7"}, \code{"MH"}, \code{"M2_CP_REACTOME"},
+or \code{"M5_GO_BP"}. Use \code{"MSIGDB_ALL"} to run every MSigDB database available
 for the selected species. \code{"Hallmark"} selects \code{H} for human and \code{MH} for
 mouse.}
 

@@ -58,24 +58,24 @@ official collection names.
 processes; a useful first-pass overview.
 \item \code{C1}: genes grouped by human chromosome cytogenetic bands; useful for
 detecting regional or copy-number-associated signals.
-\item \code{C2}, \code{C2:CGP}, \code{C2:CP}: curated gene sets, chemical/genetic perturbation
+\item \code{C2}, \code{C2_CGP}, \code{C2_CP}: curated gene sets, chemical/genetic perturbation
 signatures, or canonical pathways, respectively.
-\item \code{C2:CP:BIOCARTA}, \code{C2:CP:KEGG_MEDICUS}, \code{C2:CP:KEGG_LEGACY},
-\code{C2:CP:PID}, \code{C2:CP:REACTOME}, \code{C2:CP:WIKIPATHWAYS}: pathway collections
+\item \code{C2_CP_BIOCARTA}, \code{C2_CP_KEGG_MEDICUS}, \code{C2_CP_KEGG_LEGACY},
+\code{C2_CP_PID}, \code{C2_CP_REACTOME}, \code{C2_CP_WIKIPATHWAYS}: pathway collections
 from the named resources. \code{KEGG_LEGACY}, BioCarta, and PID are mainly
 useful for comparison with older analyses.
-\item \code{C3}, \code{C3:MIR:MIRDB}, \code{C3:MIR:MIR_LEGACY}, \code{C3:TFT:GTRD},
-\code{C3:TFT:TFT_LEGACY}: predicted microRNA or transcription-factor targets;
+\item \code{C3}, \code{C3_MIR_MIRDB}, \code{C3_MIR_MIR_LEGACY}, \code{C3_TFT_GTRD},
+\code{C3_TFT_TFT_LEGACY}: predicted microRNA or transcription-factor targets;
 useful for generating regulatory hypotheses, not proving direct binding.
-\item \code{C4}, \verb{C4:3CA}, \code{C4:CGN}, \code{C4:CM}: computational cancer gene sets,
+\item \code{C4}, \code{C4_3CA}, \code{C4_CGN}, \code{C4_CM}: computational cancer gene sets,
 including cancer-cell metaprograms, cancer-gene neighbourhoods, and cancer
 modules.
-\item \code{C5}, \code{C5:GO:BP}, \code{C5:GO:CC}, \code{C5:GO:MF}, \code{C5:HPO}: ontology gene sets for
+\item \code{C5}, \code{C5_GO_BP}, \code{C5_GO_CC}, \code{C5_GO_MF}, \code{C5_HPO}: ontology gene sets for
 biological processes, cellular components, molecular functions, or human
 disease phenotypes.
 \item \code{C6}: oncogenic perturbation signatures; useful for relating genes to
 cancer-associated pathway activity.
-\item \code{C7}, \code{C7:IMMUNESIGDB}, \code{C7:VAX}: immune states, immune perturbations, or
+\item \code{C7}, \code{C7_IMMUNESIGDB}, \code{C7_VAX}: immune states, immune perturbations, or
 vaccine-response signatures.
 \item \code{C8}: curated human cell-type marker signatures from single-cell studies.
 \item \code{C9}: computational perturbation signatures inferred from DepMap CRISPR
@@ -86,14 +86,14 @@ dependency and CCLE expression profiles.
 \itemize{
 \item \code{MH}: mouse-ortholog Hallmark gene sets; a useful first-pass overview.
 \item \code{M1}: genes grouped by mouse chromosome cytogenetic bands.
-\item \code{M2}, \code{M2:CGP}: mouse-native curated sets or perturbation signatures.
-\item \code{M2:CP:BIOCARTA}, \code{M2:CP:REACTOME}, \code{M2:CP:WIKIPATHWAYS}: mouse canonical
+\item \code{M2}, \code{M2_CGP}: mouse-native curated sets or perturbation signatures.
+\item \code{M2_CP_BIOCARTA}, \code{M2_CP_REACTOME}, \code{M2_CP_WIKIPATHWAYS}: mouse canonical
 pathway subcollections. Mouse MSigDB does not provide the human KEGG or PID
 subcollections listed above.
-\item \code{M3}, \code{M3:MIRDB}, \code{M3:GTRD}: predicted mouse microRNA or
+\item \code{M3}, \code{M3_MIRDB}, \code{M3_GTRD}: predicted mouse microRNA or
 transcription-factor targets.
-\item \code{M5}, \code{M5:GO:BP}, \code{M5:GO:CC}, \code{M5:GO:MF}: mouse Gene Ontology sets.
-\item \code{M5:MPT}: cancer-related terms from the Mammalian Phenotype Ontology.
+\item \code{M5}, \code{M5_GO_BP}, \code{M5_GO_CC}, \code{M5_GO_MF}: mouse Gene Ontology sets.
+\item \code{M5_MPT}: cancer-related terms from the Mammalian Phenotype Ontology.
 \item \code{M7}: mouse immune-cell states and immune perturbation signatures.
 \item \code{M8}: mouse cell-type marker signatures from single-cell studies.
 }

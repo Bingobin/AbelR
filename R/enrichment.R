@@ -302,24 +302,24 @@ enrich_combind <- function(
 #'   processes; a useful first-pass overview.
 #' - `C1`: genes grouped by human chromosome cytogenetic bands; useful for
 #'   detecting regional or copy-number-associated signals.
-#' - `C2`, `C2:CGP`, `C2:CP`: curated gene sets, chemical/genetic perturbation
+#' - `C2`, `C2_CGP`, `C2_CP`: curated gene sets, chemical/genetic perturbation
 #'   signatures, or canonical pathways, respectively.
-#' - `C2:CP:BIOCARTA`, `C2:CP:KEGG_MEDICUS`, `C2:CP:KEGG_LEGACY`,
-#'   `C2:CP:PID`, `C2:CP:REACTOME`, `C2:CP:WIKIPATHWAYS`: pathway collections
+#' - `C2_CP_BIOCARTA`, `C2_CP_KEGG_MEDICUS`, `C2_CP_KEGG_LEGACY`,
+#'   `C2_CP_PID`, `C2_CP_REACTOME`, `C2_CP_WIKIPATHWAYS`: pathway collections
 #'   from the named resources. `KEGG_LEGACY`, BioCarta, and PID are mainly
 #'   useful for comparison with older analyses.
-#' - `C3`, `C3:MIR:MIRDB`, `C3:MIR:MIR_LEGACY`, `C3:TFT:GTRD`,
-#'   `C3:TFT:TFT_LEGACY`: predicted microRNA or transcription-factor targets;
+#' - `C3`, `C3_MIR_MIRDB`, `C3_MIR_MIR_LEGACY`, `C3_TFT_GTRD`,
+#'   `C3_TFT_TFT_LEGACY`: predicted microRNA or transcription-factor targets;
 #'   useful for generating regulatory hypotheses, not proving direct binding.
-#' - `C4`, `C4:3CA`, `C4:CGN`, `C4:CM`: computational cancer gene sets,
+#' - `C4`, `C4_3CA`, `C4_CGN`, `C4_CM`: computational cancer gene sets,
 #'   including cancer-cell metaprograms, cancer-gene neighbourhoods, and cancer
 #'   modules.
-#' - `C5`, `C5:GO:BP`, `C5:GO:CC`, `C5:GO:MF`, `C5:HPO`: ontology gene sets for
+#' - `C5`, `C5_GO_BP`, `C5_GO_CC`, `C5_GO_MF`, `C5_HPO`: ontology gene sets for
 #'   biological processes, cellular components, molecular functions, or human
 #'   disease phenotypes.
 #' - `C6`: oncogenic perturbation signatures; useful for relating genes to
 #'   cancer-associated pathway activity.
-#' - `C7`, `C7:IMMUNESIGDB`, `C7:VAX`: immune states, immune perturbations, or
+#' - `C7`, `C7_IMMUNESIGDB`, `C7_VAX`: immune states, immune perturbations, or
 #'   vaccine-response signatures.
 #' - `C8`: curated human cell-type marker signatures from single-cell studies.
 #' - `C9`: computational perturbation signatures inferred from DepMap CRISPR
@@ -329,14 +329,14 @@ enrich_combind <- function(
 #'
 #' - `MH`: mouse-ortholog Hallmark gene sets; a useful first-pass overview.
 #' - `M1`: genes grouped by mouse chromosome cytogenetic bands.
-#' - `M2`, `M2:CGP`: mouse-native curated sets or perturbation signatures.
-#' - `M2:CP:BIOCARTA`, `M2:CP:REACTOME`, `M2:CP:WIKIPATHWAYS`: mouse canonical
+#' - `M2`, `M2_CGP`: mouse-native curated sets or perturbation signatures.
+#' - `M2_CP_BIOCARTA`, `M2_CP_REACTOME`, `M2_CP_WIKIPATHWAYS`: mouse canonical
 #'   pathway subcollections. Mouse MSigDB does not provide the human KEGG or PID
 #'   subcollections listed above.
-#' - `M3`, `M3:MIRDB`, `M3:GTRD`: predicted mouse microRNA or
+#' - `M3`, `M3_MIRDB`, `M3_GTRD`: predicted mouse microRNA or
 #'   transcription-factor targets.
-#' - `M5`, `M5:GO:BP`, `M5:GO:CC`, `M5:GO:MF`: mouse Gene Ontology sets.
-#' - `M5:MPT`: cancer-related terms from the Mammalian Phenotype Ontology.
+#' - `M5`, `M5_GO_BP`, `M5_GO_CC`, `M5_GO_MF`: mouse Gene Ontology sets.
+#' - `M5_MPT`: cancer-related terms from the Mammalian Phenotype Ontology.
 #' - `M7`: mouse immune-cell states and immune perturbation signatures.
 #' - `M8`: mouse cell-type marker signatures from single-cell studies.
 #'
@@ -361,32 +361,32 @@ enrich_combind <- function(
       H = c("H", NA_character_),
       C1 = c("C1", NA_character_),
       C2 = c("C2", NA_character_),
-      "C2:CGP" = c("C2", "CGP"),
-      "C2:CP" = c("C2", "CP"),
-      "C2:CP:BIOCARTA" = c("C2", "CP:BIOCARTA"),
-      "C2:CP:KEGG_LEGACY" = c("C2", "CP:KEGG_LEGACY"),
-      "C2:CP:KEGG_MEDICUS" = c("C2", "CP:KEGG_MEDICUS"),
-      "C2:CP:PID" = c("C2", "CP:PID"),
-      "C2:CP:REACTOME" = c("C2", "CP:REACTOME"),
-      "C2:CP:WIKIPATHWAYS" = c("C2", "CP:WIKIPATHWAYS"),
+      C2_CGP = c("C2", "CGP"),
+      C2_CP = c("C2", "CP"),
+      C2_CP_BIOCARTA = c("C2", "CP:BIOCARTA"),
+      C2_CP_KEGG_LEGACY = c("C2", "CP:KEGG_LEGACY"),
+      C2_CP_KEGG_MEDICUS = c("C2", "CP:KEGG_MEDICUS"),
+      C2_CP_PID = c("C2", "CP:PID"),
+      C2_CP_REACTOME = c("C2", "CP:REACTOME"),
+      C2_CP_WIKIPATHWAYS = c("C2", "CP:WIKIPATHWAYS"),
       C3 = c("C3", NA_character_),
-      "C3:MIR:MIRDB" = c("C3", "MIR:MIRDB"),
-      "C3:MIR:MIR_LEGACY" = c("C3", "MIR:MIR_LEGACY"),
-      "C3:TFT:GTRD" = c("C3", "TFT:GTRD"),
-      "C3:TFT:TFT_LEGACY" = c("C3", "TFT:TFT_LEGACY"),
+      C3_MIR_MIRDB = c("C3", "MIR:MIRDB"),
+      C3_MIR_MIR_LEGACY = c("C3", "MIR:MIR_LEGACY"),
+      C3_TFT_GTRD = c("C3", "TFT:GTRD"),
+      C3_TFT_TFT_LEGACY = c("C3", "TFT:TFT_LEGACY"),
       C4 = c("C4", NA_character_),
-      "C4:3CA" = c("C4", "3CA"),
-      "C4:CGN" = c("C4", "CGN"),
-      "C4:CM" = c("C4", "CM"),
+      C4_3CA = c("C4", "3CA"),
+      C4_CGN = c("C4", "CGN"),
+      C4_CM = c("C4", "CM"),
       C5 = c("C5", NA_character_),
-      "C5:GO:BP" = c("C5", "GO:BP"),
-      "C5:GO:CC" = c("C5", "GO:CC"),
-      "C5:GO:MF" = c("C5", "GO:MF"),
-      "C5:HPO" = c("C5", "HPO"),
+      C5_GO_BP = c("C5", "GO:BP"),
+      C5_GO_CC = c("C5", "GO:CC"),
+      C5_GO_MF = c("C5", "GO:MF"),
+      C5_HPO = c("C5", "HPO"),
       C6 = c("C6", NA_character_),
       C7 = c("C7", NA_character_),
-      "C7:IMMUNESIGDB" = c("C7", "IMMUNESIGDB"),
-      "C7:VAX" = c("C7", "VAX"),
+      C7_IMMUNESIGDB = c("C7", "IMMUNESIGDB"),
+      C7_VAX = c("C7", "VAX"),
       C8 = c("C8", NA_character_),
       C9 = c("C9", NA_character_)
     ))
@@ -396,18 +396,18 @@ enrich_combind <- function(
     MH = c("MH", NA_character_),
     M1 = c("M1", NA_character_),
     M2 = c("M2", NA_character_),
-    "M2:CGP" = c("M2", "CGP"),
-    "M2:CP:BIOCARTA" = c("M2", "CP:BIOCARTA"),
-    "M2:CP:REACTOME" = c("M2", "CP:REACTOME"),
-    "M2:CP:WIKIPATHWAYS" = c("M2", "CP:WIKIPATHWAYS"),
+    M2_CGP = c("M2", "CGP"),
+    M2_CP_BIOCARTA = c("M2", "CP:BIOCARTA"),
+    M2_CP_REACTOME = c("M2", "CP:REACTOME"),
+    M2_CP_WIKIPATHWAYS = c("M2", "CP:WIKIPATHWAYS"),
     M3 = c("M3", NA_character_),
-    "M3:MIRDB" = c("M3", "MIRDB"),
-    "M3:GTRD" = c("M3", "GTRD"),
+    M3_MIRDB = c("M3", "MIRDB"),
+    M3_GTRD = c("M3", "GTRD"),
     M5 = c("M5", NA_character_),
-    "M5:GO:BP" = c("M5", "GO:BP"),
-    "M5:GO:CC" = c("M5", "GO:CC"),
-    "M5:GO:MF" = c("M5", "GO:MF"),
-    "M5:MPT" = c("M5", "MPT"),
+    M5_GO_BP = c("M5", "GO:BP"),
+    M5_GO_CC = c("M5", "GO:CC"),
+    M5_GO_MF = c("M5", "GO:MF"),
+    M5_MPT = c("M5", "MPT"),
     M7 = c("M7", NA_character_),
     M8 = c("M8", NA_character_)
   )
@@ -416,7 +416,12 @@ enrich_combind <- function(
 .abel_match_msigdb_database <- function(database, species) {
   species <- .abel_normalize_species(species)
   db_map <- .abel_msigdb_database_map(species)
-  database <- toupper(trimws(as.character(database)))
+  database <- gsub(
+    ":",
+    "_",
+    toupper(trimws(as.character(database))),
+    fixed = TRUE
+  )
   if (length(database) != 1L || is.na(database) || !nzchar(database)) {
     return(NA_character_)
   }
@@ -426,20 +431,15 @@ enrich_combind <- function(
 
   if (species == "mouse") {
     legacy_aliases <- c(
-      "M2:CP" = "M2",
-      "M3:MIR:MIRDB" = "M3:MIRDB",
-      "M3:TFT:GTRD" = "M3:GTRD"
+      M2_CP = "M2",
+      M3_MIR_MIRDB = "M3_MIRDB",
+      M3_TFT_GTRD = "M3_GTRD"
     )
     if (database %in% names(legacy_aliases)) {
       return(unname(legacy_aliases[[database]]))
     }
   }
 
-  underscore_names <- gsub(":", "_", names(db_map), fixed = TRUE)
-  match_index <- which(underscore_names == database)
-  if (length(match_index) == 1L) {
-    return(names(db_map)[match_index])
-  }
   NA_character_
 }
 
@@ -875,14 +875,15 @@ gsea_plot_custorm <- function(gsea_ob, select_term, color, xpos = 3000) {
 }
 
 
-#' Plot selected GSEA pathways as a dot plot
+#' Plot grouped GSEA results with dot and heatmap views
 #'
 #' Selects pathways from one GSEA result or from multiple group-level results
 #' generated from the same gene-set database. For multiple groups, the union of
-#' independently selected top pathways is displayed on a shared y-axis and the
-#' group names are displayed on the x-axis for direct comparison. When every
-#' selected term has the same uppercase database prefix, such as `HALLMARK_`,
-#' the prefix is moved to the y-axis title and removed from the term labels.
+#' independently selected top pathways is compared across groups in both a dot
+#' plot and an NES heatmap. Both plots and the returned table use the same
+#' pathway and group order. When every selected term has the same uppercase
+#' database prefix, such as `HALLMARK_`, the prefix is moved to the y-axis title
+#' and removed from the displayed term labels.
 #'
 #' @param gsea_result A `clusterProfiler` GSEA result object, a data frame, or a
 #'   list of group-level results from the same gene-set database. Each result
@@ -900,16 +901,39 @@ gsea_plot_custorm <- function(gsea_ob, select_term, color, xpos = 3000) {
 #'   already listed are appended below them.
 #' @param group_order Optional character vector specifying the left-to-right
 #'   order of groups. The input list order is used by default.
+#' @param sentence_case Logical. If `TRUE`, replace hyphens and underscores in
+#'   pathway labels with spaces, convert all letters to lowercase, and capitalize
+#'   only the first letter. Raw pathway identifiers in the returned table remain
+#'   unchanged.
+#' @param low_color,mid_color,high_color Colours representing negative, zero,
+#'   and positive NES values in both plots.
+#' @param na_color Fill colour for missing NES values in the heatmap.
+#' @param star_size Text size for heatmap significance stars.
+#' @param tile_color,tile_size Heatmap tile border colour and line width.
 #'
-#' @return A [ggplot2::ggplot] object.
+#' @return A named list containing `dotplot`, `heatmap`, and `table`. The table
+#'   contains one row for every selected pathway and group combination, including
+#'   combinations without a reported GSEA result.
 #' @export
-plot_gsea_dotplot <- function(
+plot_gsea_summary <- function(
   gsea_result,
   top_n = 20,
   label_pathways = NULL,
-  group_order = NULL
+  group_order = NULL,
+  sentence_case = FALSE,
+  low_color = "#08306B",
+  mid_color = "grey90",
+  high_color = "#67000D",
+  na_color = "grey85",
+  star_size = 4,
+  tile_color = "grey90",
+  tile_size = 0.35
 ) {
   required_cols <- c("Description", "NES", "pvalue", "p.adjust")
+  if (!is.logical(sentence_case) || length(sentence_case) != 1L ||
+    is.na(sentence_case)) {
+    stop("sentence_case must be TRUE or FALSE.")
+  }
   label_pathways <- unique(as.character(label_pathways))
   label_pathways <- label_pathways[
     !is.na(label_pathways) & nzchar(label_pathways)
@@ -1147,6 +1171,15 @@ plot_gsea_dotplot <- function(
     )
     pathway_axis_title <- paste(common_database, "pathway")
   }
+  if (sentence_case) {
+    display_order <- gsub("[-_]+", " ", display_order)
+    display_order <- gsub("[[:space:]]+", " ", trimws(display_order))
+    display_order <- tolower(display_order)
+    display_order <- paste0(
+      toupper(substr(display_order, 1L, 1L)),
+      substring(display_order, 2L)
+    )
+  }
   display_term <- stats::setNames(display_order, pathway_order)
 
   plot_list <- lapply(group_names, function(group_name) {
@@ -1159,19 +1192,24 @@ plot_gsea_dotplot <- function(
     if (!nrow(group_result)) {
       return(NULL)
     }
-    group_result$PlotGroup <- group_name
+    group_result$Group <- group_name
     group_result
   })
   gsea.plot <- do.call(rbind, plot_list)
   rownames(gsea.plot) <- NULL
-  gsea.plot$Group <- ifelse(gsea.plot$NES < 0, "Down", "Up")
-  gsea.plot$Description <- factor(
-    as.character(gsea.plot$Description),
-    levels = rev(pathway_order)
+  gsea.plot$Description <- as.character(gsea.plot$Description)
+  gsea.plot <- dplyr::left_join(
+    tidyr::expand_grid(
+      Description = pathway_order,
+      Group = group_names
+    ),
+    gsea.plot,
+    by = c("Description", "Group")
   )
-  gsea.plot$DisplayTerm <- factor(
-    unname(display_term[as.character(gsea.plot$Description)]),
-    levels = rev(display_order)
+  gsea.plot$Direction <- ifelse(
+    is.na(gsea.plot$NES),
+    NA_character_,
+    ifelse(gsea.plot$NES < 0, "Down", "Up")
   )
   gsea.plot$PlotP <- ifelse(
     is.na(gsea.plot$p.adjust),
@@ -1179,44 +1217,31 @@ plot_gsea_dotplot <- function(
     gsea.plot$p.adjust
   )
   gsea.plot$PlotP <- pmax(gsea.plot$PlotP, .Machine$double.xmin)
+  gsea.plot$Significance <- dplyr::case_when(
+    is.na(gsea.plot$PlotP) ~ "",
+    gsea.plot$PlotP < 1e-4 ~ "****",
+    gsea.plot$PlotP < 1e-3 ~ "***",
+    gsea.plot$PlotP < 1e-2 ~ "**",
+    gsea.plot$PlotP < 5e-2 ~ "*",
+    TRUE ~ ""
+  )
+  gsea.plot$Description <- factor(
+    gsea.plot$Description,
+    levels = rev(pathway_order)
+  )
+  gsea.plot$DisplayTerm <- factor(
+    unname(display_term[as.character(gsea.plot$Description)]),
+    levels = rev(display_order)
+  )
+  gsea.plot$Group <- factor(
+    gsea.plot$Group,
+    levels = group_names
+  )
 
-  if (length(ranked_list) == 1L) {
-    gsea.plot$PlotGroup <- "GSEA"
-    return(
-      ggplot2::ggplot(
-        gsea.plot,
-        ggplot2::aes(
-          x = .data[["PlotGroup"]],
-          y = .data[["DisplayTerm"]]
-        )
-      ) +
-        ggplot2::geom_point(
-          ggplot2::aes(
-            size = -log10(.data[["PlotP"]]),
-            color = .data[["NES"]]
-          )
-        ) +
-        ggplot2::theme_test() +
-        ggplot2::scale_color_gradient2(
-          low = "#08306B",
-          mid = "grey90",
-          high = "#67000D"
-        ) +
-        ggplot2::labs(
-          x = "GSEA",
-          y = pathway_axis_title,
-          size = "-log10(P)"
-        ) +
-        ggplot2::theme(axis.text.x = ggplot2::element_blank())
-    )
-  }
-
-  gsea.plot$PlotGroup <- factor(gsea.plot$PlotGroup, levels = group_names)
-
-  ggplot2::ggplot(
+  dotplot <- ggplot2::ggplot(
     gsea.plot,
     ggplot2::aes(
-      x = .data[["PlotGroup"]],
+      x = .data[["Group"]],
       y = .data[["DisplayTerm"]]
     )
   ) +
@@ -1224,22 +1249,74 @@ plot_gsea_dotplot <- function(
       ggplot2::aes(
         size = -log10(.data[["PlotP"]]),
         color = .data[["NES"]]
-      )
+      ),
+      shape = 16,
+      na.rm = TRUE
+    ) +
+    ggplot2::geom_point(
+      ggplot2::aes(size = -log10(.data[["PlotP"]])),
+      shape = 1,
+      color = "black",
+      na.rm = TRUE
     ) +
     ggplot2::theme_test() +
     ggplot2::scale_color_gradient2(
-      low = "#08306B",
-      mid = "grey90",
-      high = "#67000D"
+      low = low_color,
+      mid = mid_color,
+      high = high_color
     ) +
     ggplot2::labs(
       x = "GSEA",
       y = pathway_axis_title,
       size = "-log10(P)"
-    ) +
-    ggplot2::theme(
+    )
+  if (length(group_names) == 1L) {
+    dotplot <- dotplot + ggplot2::theme(
+      axis.text.x = ggplot2::element_blank()
+    )
+  } else {
+    dotplot <- dotplot + ggplot2::theme(
       axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)
     )
+  }
+
+  heatmap <- ggplot2::ggplot(
+    gsea.plot,
+    ggplot2::aes(
+      x = .data[["Group"]],
+      y = .data[["DisplayTerm"]],
+      fill = .data[["NES"]]
+    )
+  ) +
+    ggplot2::geom_tile(color = tile_color, linewidth = tile_size) +
+    ggplot2::geom_text(
+      ggplot2::aes(label = .data[["Significance"]]),
+      size = star_size,
+      na.rm = TRUE
+    ) +
+    ggplot2::scale_fill_gradient2(
+      low = low_color,
+      mid = mid_color,
+      high = high_color,
+      midpoint = 0,
+      na.value = na_color,
+      name = "NES"
+    ) +
+    ggplot2::labs(x = "GSEA", y = pathway_axis_title) +
+    ggplot2::theme_bw(base_size = 12) +
+    ggplot2::theme(
+      panel.grid = ggplot2::element_blank(),
+      axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, vjust = 1),
+      axis.text.y = ggplot2::element_text(size = 10),
+      axis.ticks = ggplot2::element_blank(),
+      legend.title = ggplot2::element_text(face = "bold")
+    )
+
+  list(
+    dotplot = dotplot,
+    heatmap = heatmap,
+    table = gsea.plot
+  )
 }
 
 
@@ -1708,8 +1785,8 @@ GO_BP_treeplot_scRNAseq <- function(deg.df, label, pv = 0.05, lfc = 0.25) {
 #' @param dbs Character vector of databases to run. In addition to `"GO_BP"`,
 #'   `"GO_CC"`, `"GO_MF"`, `"GO_ALL"`, `"KEGG"`, and `"Reactome"`, this accepts
 #'   every database name supported by [EnrichMSigDB()], such as `"H"`, `"C1"`,
-#'   `"C2:CP:REACTOME"`, `"C5:GO:BP"`, `"C7"`, `"MH"`, `"M2:CP:REACTOME"`,
-#'   or `"M5:GO:BP"`. Use `"MSIGDB_ALL"` to run every MSigDB database available
+#'   `"C2_CP_REACTOME"`, `"C5_GO_BP"`, `"C7"`, `"MH"`, `"M2_CP_REACTOME"`,
+#'   or `"M5_GO_BP"`. Use `"MSIGDB_ALL"` to run every MSigDB database available
 #'   for the selected species. `"Hallmark"` selects `H` for human and `MH` for
 #'   mouse.
 #' @param gene_id_col Column containing Entrez identifiers. When it is `Entrez`
@@ -2194,7 +2271,7 @@ GSEA_analysis <- function(
       } else {
         if (species == "human") {
           result[["KEGG_msigdb"]] <- run_msigdb_gsea(
-            "C2:CP:KEGG_LEGACY",
+            "C2_CP_KEGG_LEGACY",
             "KEGG_msigdb"
           )
         } else {
@@ -2205,17 +2282,17 @@ GSEA_analysis <- function(
           )
         }
       }
-    } else if (db_key %in% c("REACTOME", "C2_CP_REACTOME", "MSIGDB_REACTOME")) {
+    } else if (db_key %in% c("REACTOME", "MSIGDB_REACTOME")) {
       reactome_db <- if (species == "human") {
-        "C2:CP:REACTOME"
+        "C2_CP_REACTOME"
       } else {
-        "M2:CP:REACTOME"
+        "M2_CP_REACTOME"
       }
       result[["Reactome"]] <- run_msigdb_gsea(reactome_db, "Reactome")
     } else if (db_key %in% c("C2_CP_KEGG", "MSIGDB_KEGG")) {
       if (species == "human") {
         result[["KEGG_msigdb"]] <- run_msigdb_gsea(
-          "C2:CP:KEGG_LEGACY",
+          "C2_CP_KEGG_LEGACY",
           "KEGG_msigdb"
         )
       } else {
