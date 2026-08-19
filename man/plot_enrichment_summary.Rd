@@ -17,7 +17,8 @@ plot_enrichment_summary(
   low_color = "grey90",
   high_color = "#00441B",
   na_color = "grey85",
-  max_logp = NULL
+  max_logp = NULL,
+  x_text_angle = 45
 )
 }
 \arguments{
@@ -34,7 +35,7 @@ contain a \code{Database} column, rows are restricted to this database.}
 \item{p_column}{P-value column used for top-pathway selection and point
 colour. Choose \code{"p.adjust"} or \code{"pvalue"}.}
 
-\item{pathway_column}{Pathway column used for selection and x-axis labels.
+\item{pathway_column}{Pathway column used for selection and y-axis labels.
 Choose \code{"ID"} (the default) or \code{"Description"}.}
 
 \item{top_n}{Number of pathways selected independently from each group using
@@ -67,6 +68,9 @@ log10-transformed values from \code{p_column}.}
 \item{max_logp}{Optional positive numeric upper limit for the plotted
 negative log10 P value. For example, \code{max_logp = 10} displays every value
 greater than 10 as 10. The default \code{NULL} applies no upper limit.}
+
+\item{x_text_angle}{Numeric angle of the group labels on the x axis. The
+default is 45 degrees.}
 }
 \value{
 A named list containing \code{dotplot} and \code{table}. Point size represents

@@ -543,6 +543,29 @@ test_that("plot_enrichment_summary sentence-cases pathway IDs", {
   expect_equal(summary$dotplot$labels$y, "C5_GO_BP pathway")
 })
 
+test_that("plot_enrichment_summary controls the x-axis text angle", {
+  result <- make_enrichment_result(
+    "H",
+    c("Pathway A", "Pathway B"),
+    c(0.01, 0.02),
+    c(5, 8)
+  )
+
+  default_plot <- plot_enrichment_summary(result, top_n = 2)
+  horizontal_plot <- plot_enrichment_summary(
+    result,
+    top_n = 2,
+    x_text_angle = 0
+  )
+
+  expect_equal(default_plot$dotplot$theme$axis.text.x$angle, 45)
+  expect_equal(horizontal_plot$dotplot$theme$axis.text.x$angle, 0)
+  expect_error(
+    plot_enrichment_summary(result, x_text_angle = Inf),
+    "finite numeric"
+  )
+})
+
 test_that("plot_enrichment_summary excludes pathways before top selection", {
   results <- list(
     GroupA = make_enrichment_result(

@@ -997,7 +997,8 @@ plot_gsea_summary <- function(
     }
     if (!is.null(database) && "Database" %in% colnames(result)) {
       result_database <- toupper(gsub(
-        ":", "_", as.character(result$Database), fixed = TRUE
+        ":", "_", as.character(result$Database),
+        fixed = TRUE
       ))
       result <- result[result_database == database, , drop = FALSE]
     }
@@ -1339,7 +1340,7 @@ plot_gsea_summary <- function(
 #'   contain a `Database` column, rows are restricted to this database.
 #' @param p_column P-value column used for top-pathway selection and point
 #'   colour. Choose `"p.adjust"` or `"pvalue"`.
-#' @param pathway_column Pathway column used for selection and x-axis labels.
+#' @param pathway_column Pathway column used for selection and y-axis labels.
 #'   Choose `"ID"` (the default) or `"Description"`.
 #' @param top_n Number of pathways selected independently from each group using
 #'   the smallest values in `p_column`. Supply one number for every group, or a
@@ -1364,6 +1365,8 @@ plot_gsea_summary <- function(
 #' @param max_logp Optional positive numeric upper limit for the plotted
 #'   negative log10 P value. For example, `max_logp = 10` displays every value
 #'   greater than 10 as 10. The default `NULL` applies no upper limit.
+#' @param x_text_angle Numeric angle of the group labels on the x axis. The
+#'   default is 45 degrees.
 #'
 #' @return A named list containing `dotplot` and `table`. Point size represents
 #'   the enrichment gene count and point colour represents the negative
@@ -1382,7 +1385,8 @@ plot_enrichment_summary <- function(
   low_color = "grey90",
   high_color = "#00441B",
   na_color = "grey85",
-  max_logp = NULL
+  max_logp = NULL,
+  x_text_angle = 45
 ) {
   required_cols <- c("ID", "Description", "Count", "pvalue", "p.adjust")
   p_column <- match.arg(p_column)
@@ -1392,6 +1396,10 @@ plot_enrichment_summary <- function(
       is.na(max_logp) || !is.finite(max_logp) || max_logp <= 0) {
       stop("max_logp must be NULL or one positive finite number.")
     }
+  }
+  if (!is.numeric(x_text_angle) || length(x_text_angle) != 1L ||
+    is.na(x_text_angle) || !is.finite(x_text_angle)) {
+    stop("x_text_angle must be one finite numeric value.")
   }
   if (!is.logical(sentence_case) || length(sentence_case) != 1L ||
     is.na(sentence_case)) {
@@ -1522,7 +1530,8 @@ plot_enrichment_summary <- function(
     }
     if (!is.null(database) && "Database" %in% colnames(result)) {
       result_database <- toupper(gsub(
-        ":", "_", as.character(result$Database), fixed = TRUE
+        ":", "_", as.character(result$Database),
+        fixed = TRUE
       ))
       result <- result[result_database == database, , drop = FALSE]
     }
@@ -1670,14 +1679,15 @@ plot_enrichment_summary <- function(
   selected_database <- if (!is.null(database)) {
     database
   } else if (length(observed_databases) == 1L) {
-    observed_databases
+    toupper(gsub(":", "_", observed_databases, fixed = TRUE))
   } else {
     NULL
   }
-  has_database_prefix <- grepl("^[A-Z][A-Z0-9]*_", pathway_order)
+  has_database_prefix <- pathway_column == "ID" &&
+    all(grepl("^[A-Z][A-Z0-9]*_", pathway_order))
   database_prefix <- sub("_.*$", "", pathway_order)
   common_prefix <- if (
-    all(has_database_prefix) && length(unique(database_prefix)) == 1L
+    has_database_prefix && length(unique(database_prefix)) == 1L
   ) {
     unique(database_prefix)
   } else {
@@ -1787,7 +1797,11 @@ plot_enrichment_summary <- function(
     ) +
     ggplot2::theme_test(base_size = 12) +
     ggplot2::theme(
-      axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, vjust = 1)
+      axis.text.x = ggplot2::element_text(
+        angle = x_text_angle,
+        hjust = 1,
+        vjust = 1
+      )
     )
 
   list(
