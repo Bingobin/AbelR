@@ -65,8 +65,10 @@ test_that("MSigDB database names accept colon, underscore, and legacy forms", {
 })
 
 make_gsea_result <- function(prefix, p_adjust) {
+  pathway_id <- paste0(prefix, seq_along(p_adjust))
   data.frame(
-    Description = paste0(prefix, seq_along(p_adjust)),
+    ID = pathway_id,
+    Description = pathway_id,
     NES = seq_along(p_adjust) * c(1, -1, 1)[seq_along(p_adjust)],
     pvalue = p_adjust / 2,
     p.adjust = p_adjust,
@@ -87,12 +89,14 @@ test_that("plot_gsea_summary handles a single result", {
 
 test_that("plot_gsea_summary compares groups on a shared pathway axis", {
   first <- data.frame(
+    ID = c("P1", "P2", "P3"),
     Description = c("P1", "P2", "P3"),
     NES = c(1, -1, 0.5),
     pvalue = c(0.01, 0.02, 0.03),
     p.adjust = c(0.01, 0.02, 0.03)
   )
   second <- data.frame(
+    ID = c("P1", "P2", "P3"),
     Description = c("P1", "P2", "P3"),
     NES = c(-1, 1, 0.8),
     pvalue = c(0.03, 0.001, 0.02),
@@ -116,7 +120,7 @@ test_that("plot_gsea_summary compares groups on a shared pathway axis", {
     c("P1", "P2", "P3")
   )
   expect_equal(
-    rev(levels(summary$table$Description)),
+    rev(levels(summary$table$ID)),
     c("P2", "P3", "P1")
   )
 })
@@ -133,7 +137,7 @@ test_that("plot_gsea_summary keeps requested pathway order", {
     label_pathways = c("P3", "P1")
   )
 
-  displayed_order <- rev(levels(summary$table$Description))
+  displayed_order <- rev(levels(summary$table$ID))
   expect_equal(displayed_order[seq_len(2)], c("P3", "P1"))
   expect_equal(displayed_order, c("P3", "P1", "P2"))
 })
@@ -154,6 +158,11 @@ test_that("plot_gsea_summary labels unnamed group results", {
 
 test_that("plot_gsea_summary moves a common MSigDB prefix to the y-axis", {
   hallmark <- data.frame(
+    ID = c(
+      "HALLMARK_APOPTOSIS",
+      "HALLMARK_MYC_TARGETS_V1",
+      "HALLMARK_E2F_TARGETS"
+    ),
     Description = c(
       "HALLMARK_APOPTOSIS",
       "HALLMARK_MYC_TARGETS_V1",
@@ -173,11 +182,15 @@ test_that("plot_gsea_summary moves a common MSigDB prefix to the y-axis", {
     rev(levels(summary$table$DisplayTerm)),
     c("APOPTOSIS", "MYC_TARGETS_V1", "E2F_TARGETS")
   )
-  expect_true(all(grepl("^HALLMARK_", summary$table$Description)))
+  expect_true(all(grepl("^HALLMARK_", summary$table$ID)))
 })
 
 test_that("plot_gsea_summary formats pathway labels in sentence case", {
   hallmark <- data.frame(
+    ID = c(
+      "HALLMARK_MYC-TARGETS_V1",
+      "HALLMARK_TNFA_SIGNALING_VIA_NFKB"
+    ),
     Description = c(
       "HALLMARK_MYC-TARGETS_V1",
       "HALLMARK_TNFA_SIGNALING_VIA_NFKB"
@@ -197,18 +210,20 @@ test_that("plot_gsea_summary formats pathway labels in sentence case", {
     rev(levels(summary$table$DisplayTerm)),
     c("Myc targets v1", "Tnfa signaling via nfkb")
   )
-  expect_true(all(grepl("^HALLMARK_", summary$table$Description)))
+  expect_true(all(grepl("^HALLMARK_", summary$table$ID)))
 })
 
 test_that("plot_gsea_summary completes missing groups and adds plot layers", {
   results <- list(
     GroupA = data.frame(
+      ID = c("HALLMARK_A", "HALLMARK_B"),
       Description = c("HALLMARK_A", "HALLMARK_B"),
       NES = c(1.5, -1.2),
       pvalue = c(0.001, 0.2),
       p.adjust = c(0.004, 0.3)
     ),
     GroupB = data.frame(
+      ID = "HALLMARK_A",
       Description = "HALLMARK_A",
       NES = -1.1,
       pvalue = 0.02,
@@ -224,7 +239,7 @@ test_that("plot_gsea_summary completes missing groups and adds plot layers", {
 
   expect_equal(nrow(summary$table), 4L)
   missing_row <- summary$table[
-    summary$table$Description == "HALLMARK_B" &
+    summary$table$SelectedPathway == "HALLMARK_B" &
       summary$table$Group == "GroupB",
   ]
   expect_true(is.na(missing_row$NES))
@@ -237,5 +252,288 @@ test_that("plot_gsea_summary completes missing groups and adds plot layers", {
         summary$table$Group == "GroupA"
     ]),
     "**"
+  )
+})
+
+test_that("plot_gsea_summary selects P-value and pathway columns", {
+  result <- data.frame(
+    ID = c("ID_A", "ID_B"),
+    Description = c("Description A", "Description B"),
+    NES = c(1.5, -1.2),
+    pvalue = c(0.001, 0.02),
+    p.adjust = c(0.5, 0.03)
+  )
+
+  by_adjusted <- plot_gsea_summary(result, top_n = 1)
+  by_raw_description <- plot_gsea_summary(
+    result,
+    p_column = "pvalue",
+    pathway_column = "Description",
+    top_n = 1
+  )
+
+  expect_equal(as.character(by_adjusted$table$ID), "ID_B")
+  expect_equal(
+    as.character(by_raw_description$table$Description),
+    "Description A"
+  )
+  expect_equal(by_raw_description$table$PlotP, 0.001)
+  expect_equal(
+    by_raw_description$dotplot$labels$size,
+    "-log10(pvalue)"
+  )
+  expect_equal(by_raw_description$table$Significance, "**")
+})
+
+test_that("plot_gsea_summary selects one database from nested groups", {
+  make_database_result <- function(database, id, p_adjust, nes) {
+    data.frame(
+      Database = database,
+      ID = id,
+      Description = paste(id, "description"),
+      NES = nes,
+      pvalue = p_adjust / 2,
+      p.adjust = p_adjust
+    )
+  }
+  results <- list(
+    GroupA = list(
+      H = make_database_result("H", "HALLMARK_A", 0.01, 1.2),
+      C5_GO_BP = make_database_result("C5_GO_BP", "GOBP_A", 0.02, -1.1)
+    ),
+    GroupB = list(
+      H = make_database_result("H", "HALLMARK_B", 0.03, -1.3),
+      C5_GO_BP = make_database_result("C5_GO_BP", "GOBP_B", 0.04, 1.4)
+    )
+  )
+
+  summary <- plot_gsea_summary(
+    results,
+    database = "C5:GO:BP",
+    top_n = 1
+  )
+
+  expect_equal(levels(summary$table$Group), c("GroupA", "GroupB"))
+  expect_setequal(as.character(summary$table$ID), c("GOBP_A", "GOBP_B"))
+  expect_true(all(
+    stats::na.omit(summary$table$Database) == "C5_GO_BP"
+  ))
+  expect_equal(summary$dotplot$labels$y, "GOBP pathway")
+})
+
+make_enrichment_result <- function(database, descriptions, p_adjust, count) {
+  data.frame(
+    Database = database,
+    Species = "human",
+    ID = paste0("ID", seq_along(descriptions)),
+    Description = descriptions,
+    GeneRatio = paste0(count, "/100"),
+    BgRatio = "10/1000",
+    RichFactor = count / 10,
+    FoldEnrichment = count / 2,
+    zScore = count / 3,
+    pvalue = p_adjust / 2,
+    p.adjust = p_adjust,
+    qvalue = p_adjust,
+    geneID = "A/B",
+    Count = count,
+    stringsAsFactors = FALSE
+  )
+}
+
+test_that("plot_enrichment_summary compares pathway counts across groups", {
+  results <- list(
+    GroupA = make_enrichment_result(
+      "C2_CP_KEGG_LEGACY",
+      c("Pathway A", "Pathway B"),
+      c(0.001, 0.2),
+      c(10, 4)
+    ),
+    GroupB = make_enrichment_result(
+      "C2_CP_KEGG_LEGACY",
+      c("Pathway A", "Pathway C"),
+      c(0.03, 0.002),
+      c(6, 12)
+    )
+  )
+
+  summary <- plot_enrichment_summary(
+    results,
+    pathway_column = "Description",
+    top_n = 1
+  )
+
+  expect_named(summary, c("dotplot", "table"))
+  expect_s3_class(summary$dotplot, "ggplot")
+  expect_equal(nrow(summary$table), 4L)
+  expect_equal(
+    rev(levels(summary$table$DisplayTerm)),
+    c("Pathway A", "Pathway C")
+  )
+  expect_equal(
+    levels(summary$table$Group),
+    c("GroupA", "GroupB")
+  )
+  expect_equal(summary$dotplot$labels$x, "Group")
+  expect_equal(summary$dotplot$labels$y, "Pathway")
+  expect_equal(summary$dotplot$labels$size, "Count")
+})
+
+test_that("plot_enrichment_summary selects one database from nested groups", {
+  results <- list(
+    GroupA = list(
+      H = make_enrichment_result("H", "Hallmark A", 0.01, 5),
+      C2_CP_KEGG_LEGACY = make_enrichment_result(
+        "C2_CP_KEGG_LEGACY", "KEGG A", 0.02, 8
+      )
+    ),
+    GroupB = list(
+      H = make_enrichment_result("H", "Hallmark B", 0.03, 6),
+      C2_CP_KEGG_LEGACY = make_enrichment_result(
+        "C2_CP_KEGG_LEGACY", "KEGG B", 0.04, 7
+      )
+    )
+  )
+
+  summary <- plot_enrichment_summary(
+    results,
+    database = "C2:CP:KEGG_LEGACY",
+    pathway_column = "Description",
+    top_n = 1,
+    group_order = c("GroupB", "GroupA"),
+    low_color = "white",
+    high_color = "darkgreen"
+  )
+
+  expect_setequal(
+    as.character(summary$table$Description),
+    c("KEGG A", "KEGG B")
+  )
+  expect_true(all(
+    stats::na.omit(as.character(summary$table$Database)) ==
+      "C2_CP_KEGG_LEGACY"
+  ))
+  expect_equal(
+    levels(summary$table$Group),
+    c("GroupB", "GroupA")
+  )
+  expect_equal(summary$dotplot$scales$scales[[1]]$palette(c(0, 1)),
+    c("#FFFFFF", "#006400")
+  )
+})
+
+test_that("plot_enrichment_summary keeps labelled pathways first", {
+  results <- list(
+    GroupA = make_enrichment_result(
+      "H",
+      c("Pathway A", "Pathway B", "Pathway C"),
+      c(0.03, 0.001, 0.02),
+      c(4, 8, 6)
+    ),
+    GroupB = make_enrichment_result(
+      "H",
+      c("Pathway A", "Pathway B", "Pathway C"),
+      c(0.04, 0.002, 0.01),
+      c(5, 7, 9)
+    )
+  )
+
+  summary <- plot_enrichment_summary(
+    results,
+    pathway_column = "Description",
+    top_n = 1,
+    label_pathways = c("Pathway C", "Pathway A")
+  )
+
+  expect_equal(
+    rev(levels(summary$table$Description)),
+    c("Pathway C", "Pathway A", "Pathway B")
+  )
+})
+
+test_that("plot_enrichment_summary selects the P-value and pathway columns", {
+  result <- make_enrichment_result(
+    "H",
+    c("Description A", "Description B"),
+    c(0.5, 0.03),
+    c(5, 8)
+  )
+  result$pvalue <- c(0.001, 0.02)
+
+  by_adjusted <- plot_enrichment_summary(result, top_n = 1)
+  by_raw_id <- plot_enrichment_summary(
+    result,
+    p_column = "pvalue",
+    pathway_column = "ID",
+    top_n = 1
+  )
+
+  expect_equal(as.character(by_adjusted$table$ID), "ID2")
+  expect_equal(as.character(by_raw_id$table$ID), "ID1")
+  expect_equal(by_raw_id$table$PlotP, 0.001)
+  expect_equal(
+    by_raw_id$dotplot$scales$scales[[1]]$name,
+    "-log10(pvalue)"
+  )
+})
+
+test_that("plot_enrichment_summary requires both pathway label columns", {
+  result <- make_enrichment_result("H", "Pathway A", 0.01, 5)
+  result$ID <- NULL
+
+  expect_warning(
+    expect_error(
+      plot_enrichment_summary(result),
+      "no valid enrichment results"
+    ),
+    "missing: ID"
+  )
+})
+
+test_that("plot_enrichment_summary caps plotted negative log10 P values", {
+  result <- make_enrichment_result(
+    "H",
+    c("Pathway A", "Pathway B"),
+    c(1e-20, 0.01),
+    c(5, 8)
+  )
+
+  uncapped <- plot_enrichment_summary(result, top_n = 2)
+  capped <- plot_enrichment_summary(result, top_n = 2, max_logp = 10)
+
+  expect_equal(max(uncapped$table$LogP), 20)
+  expect_equal(max(capped$table$LogP), 10)
+  expect_equal(
+    capped$dotplot$scales$scales[[1]]$name,
+    "-log10(p.adjust)\n(max 10)"
+  )
+  expect_error(
+    plot_enrichment_summary(result, max_logp = 0),
+    "positive finite"
+  )
+})
+
+test_that("plot_enrichment_summary sentence-cases pathway IDs", {
+  result <- make_enrichment_result(
+    "C5_GO_BP",
+    c("Long pathway definition", "Another definition"),
+    c(0.01, 0.02),
+    c(5, 8)
+  )
+  result$ID <- c("GOBP_PIGMENTATION", "GOBP_PROTEIN-FOLDING")
+
+  summary <- plot_enrichment_summary(
+    result,
+    top_n = 2,
+    sentence_case = TRUE
+  )
+
+  expect_equal(
+    rev(levels(summary$table$DisplayTerm)),
+    c("Gobp pigmentation", "Gobp protein folding")
+  )
+  expect_equal(
+    as.character(summary$table$ID),
+    c("GOBP_PIGMENTATION", "GOBP_PROTEIN-FOLDING")
   )
 })

@@ -6,6 +6,9 @@
 \usage{
 plot_gsea_summary(
   gsea_result,
+  database = NULL,
+  p_column = c("p.adjust", "pvalue"),
+  pathway_column = c("ID", "Description"),
   top_n = 20,
   label_pathways = NULL,
   group_order = NULL,
@@ -20,30 +23,42 @@ plot_gsea_summary(
 )
 }
 \arguments{
-\item{gsea_result}{A \code{clusterProfiler} GSEA result object, a data frame, or a
-list of group-level results from the same gene-set database. Each result
-must contain \code{Description}, \code{NES}, \code{pvalue}, and \code{p.adjust}. List names are
-used as group labels; unnamed elements are labelled \code{Group1}, \code{Group2}, and
-so on with a warning.}
+\item{gsea_result}{A data frame, a \code{clusterProfiler} GSEA result, a named
+list of group-level results, or a named list in which every group contains
+database-level results. Each selected result must contain \code{ID},
+\code{Description}, \code{NES}, \code{pvalue}, and \code{p.adjust}. List names are used as
+group labels; unnamed elements are labelled \code{Group1}, \code{Group2}, and so on
+with a warning.}
+
+\item{database}{Optional database name used to select the same database from
+every nested group, for example \code{"C2_CP_KEGG_LEGACY"}. Colon-form names
+such as \code{"C2:CP:KEGG_LEGACY"} are also accepted. When the selected result
+tables contain a \code{Database} column, rows are restricted to this database.}
+
+\item{p_column}{P-value column used for top-pathway selection, dot size, and
+heatmap significance stars. Choose \code{"p.adjust"} (the default) or
+\code{"pvalue"}.}
+
+\item{pathway_column}{Pathway column used for selection and plot labels.
+Choose \code{"ID"} (the default) or \code{"Description"}.}
 
 \item{top_n}{Number of pathways selected independently from each group using
-the smallest adjusted P values, or raw P values when adjusted P values are
-all missing. Supply one number for every group, or a named numeric vector
-to set different values for different groups. Set to \code{0} or \code{NULL} to use
-only \code{label_pathways}.}
+the smallest values in \code{p_column}. Supply one number for every group, or a
+named numeric vector to set different values for different groups. Set to
+\code{0} or \code{NULL} to use only \code{label_pathways}.}
 
-\item{label_pathways}{Optional character vector of pathway descriptions to
-include. These pathways are placed first and displayed from top to bottom
-in exactly the supplied order. Automatically selected top pathways not
-already listed are appended below them.}
+\item{label_pathways}{Optional character vector containing values from the
+selected \code{pathway_column}. These pathways are placed first and displayed
+from top to bottom in exactly the supplied order. Automatically selected
+pathways not already listed are appended below them.}
 
 \item{group_order}{Optional character vector specifying the left-to-right
 order of groups. The input list order is used by default.}
 
 \item{sentence_case}{Logical. If \code{TRUE}, replace hyphens and underscores in
 pathway labels with spaces, convert all letters to lowercase, and capitalize
-only the first letter. Raw pathway identifiers in the returned table remain
-unchanged.}
+only the first letter. Raw \code{ID} and \code{Description} values in the returned
+table remain unchanged.}
 
 \item{low_color, mid_color, high_color}{Colours representing negative, zero,
 and positive NES values in both plots.}
@@ -61,10 +76,8 @@ combinations without a reported GSEA result.
 }
 \description{
 Selects pathways from one GSEA result or from multiple group-level results
-generated from the same gene-set database. For multiple groups, the union of
-independently selected top pathways is compared across groups in both a dot
-plot and an NES heatmap. Both plots and the returned table use the same
-pathway and group order. When every selected term has the same uppercase
-database prefix, such as \code{HALLMARK_}, the prefix is moved to the y-axis title
-and removed from the displayed term labels.
+generated from the same gene-set database. For nested inputs, the same
+database is selected from every group before pathways are compared. The
+union of independently selected top pathways is shown in both a dot plot and
+an NES heatmap.
 }

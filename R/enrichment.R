@@ -274,85 +274,6 @@ enrich_combind <- function(
 }
 
 
-#' Run MSigDB over-representation analysis
-#'
-#' Performs over-representation analysis for one or more selected native Human
-#' or Mouse MSigDB collections using gene symbols. Human and mouse use distinct
-#' official collection names.
-#'
-#' @param gene Character vector of human or mouse gene symbols.
-#' @param database Character vector naming one or more species-specific MSigDB
-#'   collections or subcollections. If `NULL`, `"H"` is used for human and
-#'   `"MH"` for mouse. See Details for all supported names.
-#' @param species Species name or code accepted by AbelR: `"human"`, `"hsa"`,
-#'   `"Homo sapiens"`, `"mouse"`, `"mmu"`, or `"Mus musculus"`.
-#' @param universe Optional character vector of background gene symbols from
-#'   the same species as `gene`.
-#' @param pvalueCutoff,qvalueCutoff P-value and q-value cutoffs passed to
-#'   [clusterProfiler::enricher()].
-#' @param pAdjustMethod Multiple-testing correction method.
-#' @param minGSSize,maxGSSize Minimum and maximum gene-set sizes.
-#' @param return_object Logical; return `enrichResult` objects instead of data
-#'   frames.
-#'
-#' @details
-#' **Human MSigDB (`species = "human"`)**
-#'
-#' - `H`: Hallmark gene sets representing 50 coherent biological states and
-#'   processes; a useful first-pass overview.
-#' - `C1`: genes grouped by human chromosome cytogenetic bands; useful for
-#'   detecting regional or copy-number-associated signals.
-#' - `C2`, `C2_CGP`, `C2_CP`: curated gene sets, chemical/genetic perturbation
-#'   signatures, or canonical pathways, respectively.
-#' - `C2_CP_BIOCARTA`, `C2_CP_KEGG_MEDICUS`, `C2_CP_KEGG_LEGACY`,
-#'   `C2_CP_PID`, `C2_CP_REACTOME`, `C2_CP_WIKIPATHWAYS`: pathway collections
-#'   from the named resources. `KEGG_LEGACY`, BioCarta, and PID are mainly
-#'   useful for comparison with older analyses.
-#' - `C3`, `C3_MIR_MIRDB`, `C3_MIR_MIR_LEGACY`, `C3_TFT_GTRD`,
-#'   `C3_TFT_TFT_LEGACY`: predicted microRNA or transcription-factor targets;
-#'   useful for generating regulatory hypotheses, not proving direct binding.
-#' - `C4`, `C4_3CA`, `C4_CGN`, `C4_CM`: computational cancer gene sets,
-#'   including cancer-cell metaprograms, cancer-gene neighbourhoods, and cancer
-#'   modules.
-#' - `C5`, `C5_GO_BP`, `C5_GO_CC`, `C5_GO_MF`, `C5_HPO`: ontology gene sets for
-#'   biological processes, cellular components, molecular functions, or human
-#'   disease phenotypes.
-#' - `C6`: oncogenic perturbation signatures; useful for relating genes to
-#'   cancer-associated pathway activity.
-#' - `C7`, `C7_IMMUNESIGDB`, `C7_VAX`: immune states, immune perturbations, or
-#'   vaccine-response signatures.
-#' - `C8`: curated human cell-type marker signatures from single-cell studies.
-#' - `C9`: computational perturbation signatures inferred from DepMap CRISPR
-#'   dependency and CCLE expression profiles.
-#'
-#' **Mouse MSigDB (`species = "mouse"`)**
-#'
-#' - `MH`: mouse-ortholog Hallmark gene sets; a useful first-pass overview.
-#' - `M1`: genes grouped by mouse chromosome cytogenetic bands.
-#' - `M2`, `M2_CGP`: mouse-native curated sets or perturbation signatures.
-#' - `M2_CP_BIOCARTA`, `M2_CP_REACTOME`, `M2_CP_WIKIPATHWAYS`: mouse canonical
-#'   pathway subcollections. Mouse MSigDB does not provide the human KEGG or PID
-#'   subcollections listed above.
-#' - `M3`, `M3_MIRDB`, `M3_GTRD`: predicted mouse microRNA or
-#'   transcription-factor targets.
-#' - `M5`, `M5_GO_BP`, `M5_GO_CC`, `M5_GO_MF`: mouse Gene Ontology sets.
-#' - `M5_MPT`: cancer-related terms from the Mammalian Phenotype Ontology.
-#' - `M7`: mouse immune-cell states and immune perturbation signatures.
-#' - `M8`: mouse cell-type marker signatures from single-cell studies.
-#'
-#' An enriched set indicates overlap with the supplied genes. It does not by
-#' itself establish pathway activation, direct regulation, or altered cell-type
-#' abundance. Interpret results with expression direction and experimental
-#' context. Missing dependencies, database-loading failures, and empty
-#' enrichment results generate warnings and return `NULL` rather than stopping
-#' a batch workflow. Invalid species, database names, and parameter values still
-#' generate errors.
-#'
-#' @return For one database, a data frame or `enrichResult` object. If the
-#'   analysis cannot be run or has no enriched terms, a warning is issued and
-#'   `NULL` is returned. For multiple databases, a named list is returned and
-#'   failed or empty analyses are represented by `NULL` entries.
-#' @export
 .abel_msigdb_database_map <- function(species) {
   species <- .abel_normalize_species(species)
 
@@ -443,6 +364,85 @@ enrich_combind <- function(
   NA_character_
 }
 
+#' Run MSigDB over-representation analysis
+#'
+#' Performs over-representation analysis for one or more selected native Human
+#' or Mouse MSigDB collections using gene symbols. Human and mouse use distinct
+#' official collection names.
+#'
+#' @param gene Character vector of human or mouse gene symbols.
+#' @param database Character vector naming one or more species-specific MSigDB
+#'   collections or subcollections. If `NULL`, `"H"` is used for human and
+#'   `"MH"` for mouse. See Details for all supported names.
+#' @param species Species name or code accepted by AbelR: `"human"`, `"hsa"`,
+#'   `"Homo sapiens"`, `"mouse"`, `"mmu"`, or `"Mus musculus"`.
+#' @param universe Optional character vector of background gene symbols from
+#'   the same species as `gene`.
+#' @param pvalueCutoff,qvalueCutoff P-value and q-value cutoffs passed to
+#'   [clusterProfiler::enricher()].
+#' @param pAdjustMethod Multiple-testing correction method.
+#' @param minGSSize,maxGSSize Minimum and maximum gene-set sizes.
+#' @param return_object Logical; return `enrichResult` objects instead of data
+#'   frames.
+#'
+#' @details
+#' **Human MSigDB (`species = "human"`)**
+#'
+#' - `H`: Hallmark gene sets representing 50 coherent biological states and
+#'   processes; a useful first-pass overview.
+#' - `C1`: genes grouped by human chromosome cytogenetic bands; useful for
+#'   detecting regional or copy-number-associated signals.
+#' - `C2`, `C2_CGP`, `C2_CP`: curated gene sets, chemical/genetic perturbation
+#'   signatures, or canonical pathways, respectively.
+#' - `C2_CP_BIOCARTA`, `C2_CP_KEGG_MEDICUS`, `C2_CP_KEGG_LEGACY`,
+#'   `C2_CP_PID`, `C2_CP_REACTOME`, `C2_CP_WIKIPATHWAYS`: pathway collections
+#'   from the named resources. `KEGG_LEGACY`, BioCarta, and PID are mainly
+#'   useful for comparison with older analyses.
+#' - `C3`, `C3_MIR_MIRDB`, `C3_MIR_MIR_LEGACY`, `C3_TFT_GTRD`,
+#'   `C3_TFT_TFT_LEGACY`: predicted microRNA or transcription-factor targets;
+#'   useful for generating regulatory hypotheses, not proving direct binding.
+#' - `C4`, `C4_3CA`, `C4_CGN`, `C4_CM`: computational cancer gene sets,
+#'   including cancer-cell metaprograms, cancer-gene neighbourhoods, and cancer
+#'   modules.
+#' - `C5`, `C5_GO_BP`, `C5_GO_CC`, `C5_GO_MF`, `C5_HPO`: ontology gene sets for
+#'   biological processes, cellular components, molecular functions, or human
+#'   disease phenotypes.
+#' - `C6`: oncogenic perturbation signatures; useful for relating genes to
+#'   cancer-associated pathway activity.
+#' - `C7`, `C7_IMMUNESIGDB`, `C7_VAX`: immune states, immune perturbations, or
+#'   vaccine-response signatures.
+#' - `C8`: curated human cell-type marker signatures from single-cell studies.
+#' - `C9`: computational perturbation signatures inferred from DepMap CRISPR
+#'   dependency and CCLE expression profiles.
+#'
+#' **Mouse MSigDB (`species = "mouse"`)**
+#'
+#' - `MH`: mouse-ortholog Hallmark gene sets; a useful first-pass overview.
+#' - `M1`: genes grouped by mouse chromosome cytogenetic bands.
+#' - `M2`, `M2_CGP`: mouse-native curated sets or perturbation signatures.
+#' - `M2_CP_BIOCARTA`, `M2_CP_REACTOME`, `M2_CP_WIKIPATHWAYS`: mouse canonical
+#'   pathway subcollections. Mouse MSigDB does not provide the human KEGG or PID
+#'   subcollections listed above.
+#' - `M3`, `M3_MIRDB`, `M3_GTRD`: predicted mouse microRNA or
+#'   transcription-factor targets.
+#' - `M5`, `M5_GO_BP`, `M5_GO_CC`, `M5_GO_MF`: mouse Gene Ontology sets.
+#' - `M5_MPT`: cancer-related terms from the Mammalian Phenotype Ontology.
+#' - `M7`: mouse immune-cell states and immune perturbation signatures.
+#' - `M8`: mouse cell-type marker signatures from single-cell studies.
+#'
+#' An enriched set indicates overlap with the supplied genes. It does not by
+#' itself establish pathway activation, direct regulation, or altered cell-type
+#' abundance. Interpret results with expression direction and experimental
+#' context. Missing dependencies, database-loading failures, and empty
+#' enrichment results generate warnings and return `NULL` rather than stopping
+#' a batch workflow. Invalid species, database names, and parameter values still
+#' generate errors.
+#'
+#' @return For one database, a data frame or `enrichResult` object. If the
+#'   analysis cannot be run or has no enriched terms, a warning is issued and
+#'   `NULL` is returned. For multiple databases, a named list is returned and
+#'   failed or empty analyses are represented by `NULL` entries.
+#' @export
 EnrichMSigDB <- function(
   gene,
   database = NULL,
@@ -672,76 +672,6 @@ EnrichMSigDB <- function(
 }
 
 
-#' Summarize multiple enrichment categories
-#'
-#' Selects rows from GO, WikiPathways, and KEGG enrichment results and combines
-#' them in a faceted significance plot.
-#'
-#' @param enricher Enrichment list returned by [enrich_combind()].
-#' @param bp,cc,mf,wp,kg Integer row indices selected from GO BP, GO CC, GO MF,
-#'   WikiPathways, and KEGG results.
-#' @param value Column index in each enrichment result used as the plotted
-#'   P-value-like quantity.
-#'
-#' @return A [ggplot2::ggplot] enrichment summary.
-#' @export
-enricher_plot <- function(
-  enricher,
-  bp = 1:5,
-  cc = 1:5,
-  mf = 1:5,
-  wp = 1:5,
-  kg = 1:5,
-  value = 6
-) {
-  df <- data.frame(
-    Description = enricher$ego_bp@result[bp, 2],
-    Pvalue = enricher$ego_bp@result[bp, value],
-    Type = rep("GO_BP", length(bp))
-  )
-  df.tmp <- data.frame(
-    Description = enricher$ego_cc@result[cc, 2],
-    Pvalue = enricher$ego_cc@result[cc, value],
-    Type = rep("GO_CC", length(cc))
-  )
-  df <- rbind(df, df.tmp)
-  df.tmp <- data.frame(
-    Description = enricher$ego_mf@result[mf, 2],
-    Pvalue = enricher$ego_mf@result[mf, value],
-    Type = rep("GO_MF", length(mf))
-  )
-  df <- rbind(df, df.tmp)
-  df.tmp <- data.frame(
-    Description = enricher$wikipathways@result[wp, 2],
-    Pvalue = enricher$wikipathways@result[wp, value],
-    Type = rep("WikiPath", length(wp))
-  )
-  df <- rbind(df, df.tmp)
-  df.tmp <- data.frame(
-    Description = enricher$ekg@result[kg, 2],
-    Pvalue = enricher$ekg@result[kg, value],
-    Type = rep("KEGG", length(kg))
-  )
-  df <- rbind(df, df.tmp)
-  # ggplot(df,aes(x=Description,y=-log(Pvalue),fill=Type)) + geom_bar(stat = "identity",show.legend = TRUE) + coord_flip()
-  p <- ggplot(
-    df,
-    aes(-log10(Pvalue), fct_reorder(Description, -log10(Pvalue)))
-  ) +
-    geom_segment(
-      aes(xend = 0, yend = Description, color = Type),
-      linetype = 2,
-      show.legend = FALSE
-    ) +
-    geom_point(aes(color = Type), size = 5, show.legend = FALSE) +
-    scale_color_manual(values = brewer.pal(5, "Dark2")) +
-    facet_grid(Type ~ ., scales = "free", space = "free_y", switch = "x") +
-    blank +
-    ylab("")
-  return(p)
-}
-
-
 #' Draw a customized GSEA running-score plot
 #'
 #' Builds a three-panel GSEA plot showing the enrichment score, ranked gene
@@ -878,33 +808,40 @@ gsea_plot_custorm <- function(gsea_ob, select_term, color, xpos = 3000) {
 #' Plot grouped GSEA results with dot and heatmap views
 #'
 #' Selects pathways from one GSEA result or from multiple group-level results
-#' generated from the same gene-set database. For multiple groups, the union of
-#' independently selected top pathways is compared across groups in both a dot
-#' plot and an NES heatmap. Both plots and the returned table use the same
-#' pathway and group order. When every selected term has the same uppercase
-#' database prefix, such as `HALLMARK_`, the prefix is moved to the y-axis title
-#' and removed from the displayed term labels.
+#' generated from the same gene-set database. For nested inputs, the same
+#' database is selected from every group before pathways are compared. The
+#' union of independently selected top pathways is shown in both a dot plot and
+#' an NES heatmap.
 #'
-#' @param gsea_result A `clusterProfiler` GSEA result object, a data frame, or a
-#'   list of group-level results from the same gene-set database. Each result
-#'   must contain `Description`, `NES`, `pvalue`, and `p.adjust`. List names are
-#'   used as group labels; unnamed elements are labelled `Group1`, `Group2`, and
-#'   so on with a warning.
+#' @param gsea_result A data frame, a `clusterProfiler` GSEA result, a named
+#'   list of group-level results, or a named list in which every group contains
+#'   database-level results. Each selected result must contain `ID`,
+#'   `Description`, `NES`, `pvalue`, and `p.adjust`. List names are used as
+#'   group labels; unnamed elements are labelled `Group1`, `Group2`, and so on
+#'   with a warning.
+#' @param database Optional database name used to select the same database from
+#'   every nested group, for example `"C2_CP_KEGG_LEGACY"`. Colon-form names
+#'   such as `"C2:CP:KEGG_LEGACY"` are also accepted. When the selected result
+#'   tables contain a `Database` column, rows are restricted to this database.
+#' @param p_column P-value column used for top-pathway selection, dot size, and
+#'   heatmap significance stars. Choose `"p.adjust"` (the default) or
+#'   `"pvalue"`.
+#' @param pathway_column Pathway column used for selection and plot labels.
+#'   Choose `"ID"` (the default) or `"Description"`.
 #' @param top_n Number of pathways selected independently from each group using
-#'   the smallest adjusted P values, or raw P values when adjusted P values are
-#'   all missing. Supply one number for every group, or a named numeric vector
-#'   to set different values for different groups. Set to `0` or `NULL` to use
-#'   only `label_pathways`.
-#' @param label_pathways Optional character vector of pathway descriptions to
-#'   include. These pathways are placed first and displayed from top to bottom
-#'   in exactly the supplied order. Automatically selected top pathways not
-#'   already listed are appended below them.
+#'   the smallest values in `p_column`. Supply one number for every group, or a
+#'   named numeric vector to set different values for different groups. Set to
+#'   `0` or `NULL` to use only `label_pathways`.
+#' @param label_pathways Optional character vector containing values from the
+#'   selected `pathway_column`. These pathways are placed first and displayed
+#'   from top to bottom in exactly the supplied order. Automatically selected
+#'   pathways not already listed are appended below them.
 #' @param group_order Optional character vector specifying the left-to-right
 #'   order of groups. The input list order is used by default.
 #' @param sentence_case Logical. If `TRUE`, replace hyphens and underscores in
 #'   pathway labels with spaces, convert all letters to lowercase, and capitalize
-#'   only the first letter. Raw pathway identifiers in the returned table remain
-#'   unchanged.
+#'   only the first letter. Raw `ID` and `Description` values in the returned
+#'   table remain unchanged.
 #' @param low_color,mid_color,high_color Colours representing negative, zero,
 #'   and positive NES values in both plots.
 #' @param na_color Fill colour for missing NES values in the heatmap.
@@ -917,6 +854,9 @@ gsea_plot_custorm <- function(gsea_ob, select_term, color, xpos = 3000) {
 #' @export
 plot_gsea_summary <- function(
   gsea_result,
+  database = NULL,
+  p_column = c("p.adjust", "pvalue"),
+  pathway_column = c("ID", "Description"),
   top_n = 20,
   label_pathways = NULL,
   group_order = NULL,
@@ -929,15 +869,99 @@ plot_gsea_summary <- function(
   tile_color = "grey90",
   tile_size = 0.35
 ) {
-  required_cols <- c("Description", "NES", "pvalue", "p.adjust")
+  required_cols <- c("ID", "Description", "NES", "pvalue", "p.adjust")
+  p_column <- match.arg(p_column)
+  pathway_column <- match.arg(pathway_column)
+
   if (!is.logical(sentence_case) || length(sentence_case) != 1L ||
     is.na(sentence_case)) {
     stop("sentence_case must be TRUE or FALSE.")
+  }
+  if (!is.null(database)) {
+    if (!is.character(database) || length(database) != 1L ||
+      is.na(database) || !nzchar(trimws(database))) {
+      stop("database must be NULL or one non-empty database name.")
+    }
+    database <- toupper(gsub(":", "_", trimws(database), fixed = TRUE))
   }
   label_pathways <- unique(as.character(label_pathways))
   label_pathways <- label_pathways[
     !is.na(label_pathways) & nzchar(label_pathways)
   ]
+
+  is_result_list <- is.list(gsea_result) && !is.data.frame(gsea_result)
+  if (is_result_list) {
+    result_list <- gsea_result
+    if (!length(result_list)) {
+      stop("gsea_result contains no results.")
+    }
+    group_names <- names(result_list)
+    if (is.null(group_names)) {
+      group_names <- rep("", length(result_list))
+    }
+    blank_names <- is.na(group_names) | !nzchar(group_names)
+    if (any(blank_names)) {
+      warning(
+        "gsea_result has unnamed groups; assigning Group1, Group2, and so on.",
+        call. = FALSE
+      )
+      group_names[blank_names] <- paste0("Group", which(blank_names))
+    }
+    if (anyDuplicated(group_names)) {
+      warning(
+        "gsea_result contains duplicated group names; making them unique.",
+        call. = FALSE
+      )
+      group_names <- make.unique(group_names)
+    }
+    names(result_list) <- group_names
+  } else {
+    result_list <- list(GSEA = gsea_result)
+  }
+
+  select_database <- function(x, group_name) {
+    if (is.null(x)) {
+      warning("Ignoring NULL GSEA group: ", group_name, call. = FALSE)
+      return(NULL)
+    }
+    is_nested <- is.list(x) && !is.data.frame(x)
+    if (is_nested) {
+      if (is.null(database)) {
+        if (length(x) != 1L) {
+          stop(
+            "Group '", group_name,
+            "' contains multiple database results; specify database."
+          )
+        }
+        return(x[[1L]])
+      }
+      nested_names <- names(x)
+      normalized_names <- toupper(gsub(":", "_", nested_names, fixed = TRUE))
+      db_index <- match(database, normalized_names)
+      if (is.na(db_index)) {
+        warning(
+          "Ignoring group '", group_name, "': database ", database,
+          " was not found.",
+          call. = FALSE
+        )
+        return(NULL)
+      }
+      return(x[[db_index]])
+    }
+    x
+  }
+
+  group_names <- names(result_list)
+  result_list <- lapply(
+    group_names,
+    function(group_name) select_database(result_list[[group_name]], group_name)
+  )
+  names(result_list) <- group_names
+  null_results <- vapply(result_list, is.null, logical(1))
+  result_list <- result_list[!null_results]
+  if (!length(result_list)) {
+    stop("gsea_result contains no results for the selected database.")
+  }
 
   coerce_result <- function(x, group_name, allow_skip = FALSE) {
     result <- tryCatch(
@@ -971,50 +995,13 @@ plot_gsea_summary <- function(
         paste(missing_cols, collapse = ", ")
       )
     }
+    if (!is.null(database) && "Database" %in% colnames(result)) {
+      result_database <- toupper(gsub(
+        ":", "_", as.character(result$Database), fixed = TRUE
+      ))
+      result <- result[result_database == database, , drop = FALSE]
+    }
     result
-  }
-
-  is_result_list <- is.list(gsea_result) && !is.data.frame(gsea_result)
-  if (is_result_list) {
-    result_list <- gsea_result
-    if (!length(result_list)) {
-      stop("gsea_result contains no results.")
-    }
-    group_names <- names(result_list)
-    if (is.null(group_names)) {
-      group_names <- rep("", length(result_list))
-    }
-    blank_names <- is.na(group_names) | !nzchar(group_names)
-    if (any(blank_names)) {
-      warning(
-        "gsea_result has unnamed groups; assigning Group1, Group2, and so on.",
-        call. = FALSE
-      )
-      group_names[blank_names] <- paste0("Group", which(blank_names))
-    }
-    if (anyDuplicated(group_names)) {
-      warning(
-        "gsea_result contains duplicated group names; making them unique.",
-        call. = FALSE
-      )
-      group_names <- make.unique(group_names)
-    }
-    names(result_list) <- group_names
-
-    null_results <- vapply(result_list, is.null, logical(1))
-    if (any(null_results)) {
-      warning(
-        "Ignoring NULL GSEA groups: ",
-        paste(names(result_list)[null_results], collapse = ", "),
-        call. = FALSE
-      )
-      result_list <- result_list[!null_results]
-    }
-    if (!length(result_list)) {
-      stop("gsea_result contains only NULL results.")
-    }
-  } else {
-    result_list <- list(GSEA = gsea_result)
   }
 
   group_names <- names(result_list)
@@ -1030,9 +1017,7 @@ plot_gsea_summary <- function(
   )
   names(result_list) <- group_names
   invalid_results <- vapply(result_list, is.null, logical(1))
-  if (any(invalid_results)) {
-    result_list <- result_list[!invalid_results]
-  }
+  result_list <- result_list[!invalid_results]
   if (!length(result_list)) {
     stop("gsea_result contains no valid GSEA results.")
   }
@@ -1049,11 +1034,23 @@ plot_gsea_summary <- function(
         paste(unknown_groups, collapse = ", ")
       )
     }
-    omitted_groups <- setdiff(names(result_list), group_order)
-    group_order <- c(group_order, omitted_groups)
+    group_order <- c(group_order, setdiff(names(result_list), group_order))
     result_list <- result_list[group_order]
   }
   group_names <- names(result_list)
+
+  observed_databases <- unique(unlist(lapply(result_list, function(x) {
+    if (!"Database" %in% colnames(x)) {
+      return(character())
+    }
+    as.character(stats::na.omit(x$Database))
+  }), use.names = FALSE))
+  if (is.null(database) && length(observed_databases) > 1L) {
+    stop(
+      "Results contain multiple databases; specify database. Found: ",
+      paste(observed_databases, collapse = ", ")
+    )
+  }
 
   if (!is.null(top_n)) {
     if (!is.numeric(top_n) || !length(top_n) || anyNA(top_n) ||
@@ -1083,58 +1080,52 @@ plot_gsea_summary <- function(
   }
 
   rank_result <- function(result) {
-    rank_col <- if (any(!is.na(result$p.adjust))) "p.adjust" else "pvalue"
-    ranked_result <- result[
-      !is.na(result[[rank_col]]) & is.finite(result[[rank_col]]), ,
+    result$NES <- suppressWarnings(as.numeric(result$NES))
+    result$pvalue <- suppressWarnings(as.numeric(result$pvalue))
+    result$p.adjust <- suppressWarnings(as.numeric(result$p.adjust))
+    result$SelectedPathway <- as.character(result[[pathway_column]])
+    result <- result[
+      !is.na(result[[p_column]]) & is.finite(result[[p_column]]) &
+        !is.na(result$SelectedPathway) & nzchar(result$SelectedPathway), ,
       drop = FALSE
     ]
-    ranked_result <- ranked_result[
-      order(ranked_result[[rank_col]], -abs(ranked_result$NES)), ,
+    result <- result[
+      order(result[[p_column]], -abs(result$NES), na.last = TRUE), ,
       drop = FALSE
     ]
-    ranked_result <- ranked_result[
-      !duplicated(as.character(ranked_result$Description)),
-      required_cols,
+    result <- result[
+      !duplicated(result$SelectedPathway), ,
       drop = FALSE
     ]
-    ranked_result
+    result
   }
 
-  ranked_list <- lapply(
-    group_names,
-    function(group_name) {
-      rank_result(result_list[[group_name]])
-    }
-  )
-  names(ranked_list) <- group_names
+  ranked_list <- lapply(result_list, rank_result)
   empty_groups <- vapply(ranked_list, nrow, integer(1)) == 0L
   if (any(empty_groups)) {
     warning(
       "Ignoring groups without finite pathway P values: ",
-      paste(group_names[empty_groups], collapse = ", "),
+      paste(names(ranked_list)[empty_groups], collapse = ", "),
       call. = FALSE
     )
     ranked_list <- ranked_list[!empty_groups]
-    group_names <- group_names[!empty_groups]
+    group_names <- names(ranked_list)
     top_by_group <- top_by_group[group_names]
   }
   if (!length(ranked_list)) {
     stop("No groups contain finite pathway P values.")
   }
 
-  top_terms <- unlist(
-    lapply(group_names, function(group_name) {
-      utils::head(
-        as.character(ranked_list[[group_name]]$Description),
-        top_by_group[[group_name]]
-      )
-    }),
-    use.names = FALSE
-  )
-  available_terms <- unique(unlist(
-    lapply(ranked_list, function(x) as.character(x$Description)),
-    use.names = FALSE
-  ))
+  top_terms <- unlist(lapply(group_names, function(group_name) {
+    utils::head(
+      ranked_list[[group_name]]$SelectedPathway,
+      top_by_group[[group_name]]
+    )
+  }), use.names = FALSE)
+  available_terms <- unique(unlist(lapply(
+    ranked_list,
+    function(x) x$SelectedPathway
+  ), use.names = FALSE))
   missing_labels <- setdiff(label_pathways, available_terms)
   if (length(missing_labels)) {
     warning(
@@ -1143,8 +1134,10 @@ plot_gsea_summary <- function(
       call. = FALSE
     )
   }
-  ordered_labels <- label_pathways[label_pathways %in% available_terms]
-  pathway_order <- unique(c(ordered_labels, top_terms))
+  pathway_order <- unique(c(
+    label_pathways[label_pathways %in% available_terms],
+    top_terms
+  ))
   if (!length(pathway_order)) {
     stop(
       "No pathways were selected. Use top_n > 0 or provide label_pathways."
@@ -1153,23 +1146,35 @@ plot_gsea_summary <- function(
 
   has_database_prefix <- grepl("^[A-Z][A-Z0-9]*_", pathway_order)
   database_prefix <- sub("_.*$", "", pathway_order)
-  common_database <- if (
+  common_prefix <- if (
     all(has_database_prefix) && length(unique(database_prefix)) == 1L
   ) {
     unique(database_prefix)
   } else {
     NULL
   }
-  if (is.null(common_database)) {
-    display_order <- pathway_order
-    pathway_axis_title <- "Pathway"
+  selected_database <- if (!is.null(database)) {
+    database
+  } else if (length(observed_databases) == 1L) {
+    observed_databases
   } else {
+    NULL
+  }
+
+  if (!is.null(common_prefix)) {
     display_order <- sub(
-      paste0("^", common_database, "_+"),
+      paste0("^", common_prefix, "_+"),
       "",
       pathway_order
     )
-    pathway_axis_title <- paste(common_database, "pathway")
+    pathway_axis_title <- paste(common_prefix, "pathway")
+  } else {
+    display_order <- pathway_order
+    pathway_axis_title <- if (is.null(selected_database)) {
+      "Pathway"
+    } else {
+      paste(selected_database, "pathway")
+    }
   }
   if (sentence_case) {
     display_order <- gsub("[-_]+", " ", display_order)
@@ -1183,39 +1188,34 @@ plot_gsea_summary <- function(
   display_term <- stats::setNames(display_order, pathway_order)
 
   plot_list <- lapply(group_names, function(group_name) {
-    group_result <- ranked_list[[group_name]]
-    group_result <- group_result[
-      as.character(group_result$Description) %in% pathway_order,
-      required_cols,
+    result <- ranked_list[[group_name]]
+    result <- result[
+      result$SelectedPathway %in% pathway_order, ,
       drop = FALSE
     ]
-    if (!nrow(group_result)) {
+    if (!nrow(result)) {
       return(NULL)
     }
-    group_result$Group <- group_name
-    group_result
+    result$Group <- group_name
+    result
   })
   gsea.plot <- do.call(rbind, plot_list)
   rownames(gsea.plot) <- NULL
-  gsea.plot$Description <- as.character(gsea.plot$Description)
   gsea.plot <- dplyr::left_join(
     tidyr::expand_grid(
-      Description = pathway_order,
+      SelectedPathway = pathway_order,
       Group = group_names
     ),
     gsea.plot,
-    by = c("Description", "Group")
+    by = c("SelectedPathway", "Group")
   )
+  gsea.plot[[pathway_column]] <- gsea.plot$SelectedPathway
   gsea.plot$Direction <- ifelse(
     is.na(gsea.plot$NES),
     NA_character_,
     ifelse(gsea.plot$NES < 0, "Down", "Up")
   )
-  gsea.plot$PlotP <- ifelse(
-    is.na(gsea.plot$p.adjust),
-    gsea.plot$pvalue,
-    gsea.plot$p.adjust
-  )
+  gsea.plot$PlotP <- gsea.plot[[p_column]]
   gsea.plot$PlotP <- pmax(gsea.plot$PlotP, .Machine$double.xmin)
   gsea.plot$Significance <- dplyr::case_when(
     is.na(gsea.plot$PlotP) ~ "",
@@ -1225,12 +1225,12 @@ plot_gsea_summary <- function(
     gsea.plot$PlotP < 5e-2 ~ "*",
     TRUE ~ ""
   )
-  gsea.plot$Description <- factor(
-    gsea.plot$Description,
+  gsea.plot[[pathway_column]] <- factor(
+    gsea.plot[[pathway_column]],
     levels = rev(pathway_order)
   )
   gsea.plot$DisplayTerm <- factor(
-    unname(display_term[as.character(gsea.plot$Description)]),
+    unname(display_term[gsea.plot$SelectedPathway]),
     levels = rev(display_order)
   )
   gsea.plot$Group <- factor(
@@ -1238,6 +1238,7 @@ plot_gsea_summary <- function(
     levels = group_names
   )
 
+  p_legend <- paste0("-log10(", p_column, ")")
   dotplot <- ggplot2::ggplot(
     gsea.plot,
     ggplot2::aes(
@@ -1268,7 +1269,7 @@ plot_gsea_summary <- function(
     ggplot2::labs(
       x = "GSEA",
       y = pathway_axis_title,
-      size = "-log10(P)"
+      size = p_legend
     )
   if (length(group_names) == 1L) {
     dotplot <- dotplot + ggplot2::theme(
@@ -1320,6 +1321,430 @@ plot_gsea_summary <- function(
 }
 
 
+#' Plot grouped over-representation enrichment results
+#'
+#' Compares over-representation analysis results across groups using a shared
+#' pathway axis. Pathways are selected independently within each group and then
+#' combined, so the plotted table retains the `Count` and P value reported by
+#' each group. Missing pathway-by-group combinations are retained as missing
+#' rows and are not drawn as points.
+#'
+#' @param enrichment_result A data frame, a `clusterProfiler` enrichment result,
+#'   a named list of group-level results, or a named list in which every group
+#'   contains database-level results. Each selected result must contain
+#'   `ID`, `Description`, `Count`, `pvalue`, and `p.adjust`.
+#' @param database Optional database name used to select the same database from
+#'   every nested group, for example `"C2_CP_KEGG_LEGACY"`. Colon-form names
+#'   such as `"C2:CP:KEGG_LEGACY"` are also accepted. When the input tables
+#'   contain a `Database` column, rows are restricted to this database.
+#' @param p_column P-value column used for top-pathway selection and point
+#'   colour. Choose `"p.adjust"` or `"pvalue"`.
+#' @param pathway_column Pathway column used for selection and x-axis labels.
+#'   Choose `"ID"` (the default) or `"Description"`.
+#' @param top_n Number of pathways selected independently from each group using
+#'   the smallest values in `p_column`. Supply one number for every group, or a
+#'   named numeric vector to set different values for different groups. Set to
+#'   `0` or `NULL` to use only `label_pathways`.
+#' @param label_pathways Optional character vector containing values from the
+#'   selected `pathway_column`. These pathways are placed first from top to
+#'   bottom in the supplied order. Automatically selected pathways not already
+#'   listed are appended.
+#' @param group_order Optional character vector specifying the left-to-right
+#'   order of groups. The input list order is used by default.
+#' @param sentence_case Logical. If `TRUE`, replace hyphens and underscores in
+#'   pathway labels with spaces, convert all letters to lowercase, and capitalize
+#'   only the first letter. Raw `ID` and `Description` values in the returned
+#'   table are unchanged.
+#' @param low_color,high_color Colours representing low and high negative
+#'   log10-transformed values from `p_column`.
+#' @param na_color Colour used for missing P values.
+#' @param max_logp Optional positive numeric upper limit for the plotted
+#'   negative log10 P value. For example, `max_logp = 10` displays every value
+#'   greater than 10 as 10. The default `NULL` applies no upper limit.
+#'
+#' @return A named list containing `dotplot` and `table`. Point size represents
+#'   the enrichment gene count and point colour represents the negative
+#'   log10-transformed value from `p_column`.
+#' @export
+plot_enrichment_summary <- function(
+  enrichment_result,
+  database = NULL,
+  p_column = c("p.adjust", "pvalue"),
+  pathway_column = c("ID", "Description"),
+  top_n = 20,
+  label_pathways = NULL,
+  group_order = NULL,
+  sentence_case = FALSE,
+  low_color = "grey90",
+  high_color = "#00441B",
+  na_color = "grey85",
+  max_logp = NULL
+) {
+  required_cols <- c("ID", "Description", "Count", "pvalue", "p.adjust")
+  p_column <- match.arg(p_column)
+  pathway_column <- match.arg(pathway_column)
+  if (!is.null(max_logp)) {
+    if (!is.numeric(max_logp) || length(max_logp) != 1L ||
+      is.na(max_logp) || !is.finite(max_logp) || max_logp <= 0) {
+      stop("max_logp must be NULL or one positive finite number.")
+    }
+  }
+  if (!is.logical(sentence_case) || length(sentence_case) != 1L ||
+    is.na(sentence_case)) {
+    stop("sentence_case must be TRUE or FALSE.")
+  }
+  if (!is.null(database)) {
+    if (!is.character(database) || length(database) != 1L ||
+      is.na(database) || !nzchar(trimws(database))) {
+      stop("database must be NULL or one non-empty database name.")
+    }
+    database <- toupper(gsub(":", "_", trimws(database), fixed = TRUE))
+  }
+  label_pathways <- unique(as.character(label_pathways))
+  label_pathways <- label_pathways[
+    !is.na(label_pathways) & nzchar(label_pathways)
+  ]
+
+  is_result_container <- is.list(enrichment_result) &&
+    !is.data.frame(enrichment_result)
+  if (is_result_container) {
+    result_list <- enrichment_result
+    if (!length(result_list)) {
+      stop("enrichment_result contains no results.")
+    }
+    group_names <- names(result_list)
+    if (is.null(group_names)) {
+      group_names <- rep("", length(result_list))
+    }
+    blank_names <- is.na(group_names) | !nzchar(group_names)
+    if (any(blank_names)) {
+      warning(
+        "enrichment_result has unnamed groups; assigning Group1, Group2, and so on.",
+        call. = FALSE
+      )
+      group_names[blank_names] <- paste0("Group", which(blank_names))
+    }
+    if (anyDuplicated(group_names)) {
+      warning(
+        "enrichment_result contains duplicated group names; making them unique.",
+        call. = FALSE
+      )
+      group_names <- make.unique(group_names)
+    }
+    names(result_list) <- group_names
+  } else {
+    result_list <- list(Enrichment = enrichment_result)
+  }
+
+  select_database <- function(x, group_name) {
+    if (is.null(x)) {
+      warning("Ignoring NULL enrichment group: ", group_name, call. = FALSE)
+      return(NULL)
+    }
+    is_nested <- is.list(x) && !is.data.frame(x)
+    if (is_nested) {
+      if (is.null(database)) {
+        if (length(x) != 1L) {
+          stop(
+            "Group '", group_name,
+            "' contains multiple database results; specify database."
+          )
+        }
+        return(x[[1L]])
+      }
+      nested_names <- names(x)
+      normalized_names <- toupper(gsub(":", "_", nested_names, fixed = TRUE))
+      db_index <- match(database, normalized_names)
+      if (is.na(db_index)) {
+        warning(
+          "Ignoring group '", group_name, "': database ", database,
+          " was not found.",
+          call. = FALSE
+        )
+        return(NULL)
+      }
+      return(x[[db_index]])
+    }
+    x
+  }
+
+  group_names <- names(result_list)
+  result_list <- lapply(
+    group_names,
+    function(group_name) select_database(result_list[[group_name]], group_name)
+  )
+  names(result_list) <- group_names
+  null_results <- vapply(result_list, is.null, logical(1))
+  result_list <- result_list[!null_results]
+  if (!length(result_list)) {
+    stop("enrichment_result contains no results for the selected database.")
+  }
+
+  coerce_result <- function(x, group_name) {
+    result <- tryCatch(
+      as.data.frame(x),
+      error = function(e) {
+        warning(
+          "Ignoring group '", group_name, "': ", conditionMessage(e),
+          call. = FALSE
+        )
+        NULL
+      }
+    )
+    if (is.null(result)) {
+      return(NULL)
+    }
+    missing_cols <- setdiff(required_cols, colnames(result))
+    if (length(missing_cols)) {
+      warning(
+        "Ignoring group '", group_name, "' because it is missing: ",
+        paste(missing_cols, collapse = ", "),
+        call. = FALSE
+      )
+      return(NULL)
+    }
+    if (!is.null(database) && "Database" %in% colnames(result)) {
+      result_database <- toupper(gsub(
+        ":", "_", as.character(result$Database), fixed = TRUE
+      ))
+      result <- result[result_database == database, , drop = FALSE]
+    }
+    result
+  }
+
+  group_names <- names(result_list)
+  result_list <- lapply(
+    group_names,
+    function(group_name) coerce_result(result_list[[group_name]], group_name)
+  )
+  names(result_list) <- group_names
+  invalid_results <- vapply(result_list, is.null, logical(1))
+  result_list <- result_list[!invalid_results]
+  if (!length(result_list)) {
+    stop("enrichment_result contains no valid enrichment results.")
+  }
+
+  if (!is.null(group_order)) {
+    if (!is.character(group_order) || anyNA(group_order) ||
+      any(!nzchar(group_order)) || anyDuplicated(group_order)) {
+      stop("group_order must contain unique, non-empty group names.")
+    }
+    unknown_groups <- setdiff(group_order, names(result_list))
+    if (length(unknown_groups)) {
+      stop(
+        "group_order contains unknown groups: ",
+        paste(unknown_groups, collapse = ", ")
+      )
+    }
+    group_order <- c(group_order, setdiff(names(result_list), group_order))
+    result_list <- result_list[group_order]
+  }
+  group_names <- names(result_list)
+
+  observed_databases <- unique(unlist(lapply(result_list, function(x) {
+    if (!"Database" %in% colnames(x)) {
+      return(character())
+    }
+    as.character(stats::na.omit(x$Database))
+  }), use.names = FALSE))
+  if (is.null(database) && length(observed_databases) > 1L) {
+    stop(
+      "Results contain multiple databases; specify database. Found: ",
+      paste(observed_databases, collapse = ", ")
+    )
+  }
+
+  if (!is.null(top_n)) {
+    if (!is.numeric(top_n) || !length(top_n) || anyNA(top_n) ||
+      any(!is.finite(top_n)) || any(top_n < 0)) {
+      stop("top_n must be NULL or contain non-negative numbers.")
+    }
+    if (length(top_n) == 1L) {
+      top_by_group <- stats::setNames(
+        rep(as.integer(top_n), length(result_list)),
+        group_names
+      )
+    } else if (!is.null(names(top_n)) &&
+      all(group_names %in% names(top_n))) {
+      top_by_group <- as.integer(top_n[group_names])
+      names(top_by_group) <- group_names
+    } else if (length(top_n) == length(result_list)) {
+      top_by_group <- as.integer(top_n)
+      names(top_by_group) <- group_names
+    } else {
+      stop(
+        "top_n must have length 1, match the number of groups, or be named ",
+        "for every group."
+      )
+    }
+  } else {
+    top_by_group <- stats::setNames(rep(0L, length(result_list)), group_names)
+  }
+
+  rank_result <- function(result) {
+    result$Count <- suppressWarnings(as.numeric(result$Count))
+    result$pvalue <- suppressWarnings(as.numeric(result$pvalue))
+    result$p.adjust <- suppressWarnings(as.numeric(result$p.adjust))
+    result$SelectedPathway <- as.character(result[[pathway_column]])
+    result <- result[
+      !is.na(result[[p_column]]) & is.finite(result[[p_column]]) &
+        !is.na(result$SelectedPathway) & nzchar(result$SelectedPathway), ,
+      drop = FALSE
+    ]
+    result <- result[
+      order(result[[p_column]], -result$Count, na.last = TRUE), ,
+      drop = FALSE
+    ]
+    result <- result[
+      !duplicated(result$SelectedPathway), ,
+      drop = FALSE
+    ]
+    result
+  }
+
+  ranked_list <- lapply(result_list, rank_result)
+  empty_groups <- vapply(ranked_list, nrow, integer(1)) == 0L
+  if (any(empty_groups)) {
+    warning(
+      "Ignoring groups without finite pathway P values: ",
+      paste(names(ranked_list)[empty_groups], collapse = ", "),
+      call. = FALSE
+    )
+    ranked_list <- ranked_list[!empty_groups]
+    group_names <- names(ranked_list)
+    top_by_group <- top_by_group[group_names]
+  }
+  if (!length(ranked_list)) {
+    stop("No groups contain finite pathway P values.")
+  }
+
+  top_terms <- unlist(lapply(group_names, function(group_name) {
+    utils::head(
+      ranked_list[[group_name]]$SelectedPathway,
+      top_by_group[[group_name]]
+    )
+  }), use.names = FALSE)
+  available_terms <- unique(unlist(lapply(
+    ranked_list,
+    function(x) x$SelectedPathway
+  ), use.names = FALSE))
+  missing_labels <- setdiff(label_pathways, available_terms)
+  if (length(missing_labels)) {
+    warning(
+      "label_pathways not found in any group: ",
+      paste(missing_labels, collapse = ", "),
+      call. = FALSE
+    )
+  }
+  pathway_order <- unique(c(
+    label_pathways[label_pathways %in% available_terms],
+    top_terms
+  ))
+  if (!length(pathway_order)) {
+    stop(
+      "No pathways were selected. Use top_n > 0 or provide label_pathways."
+    )
+  }
+
+  display_order <- pathway_order
+  if (sentence_case) {
+    display_order <- gsub("[-_]+", " ", display_order)
+    display_order <- gsub("[[:space:]]+", " ", trimws(display_order))
+    display_order <- tolower(display_order)
+    display_order <- paste0(
+      toupper(substr(display_order, 1L, 1L)),
+      substring(display_order, 2L)
+    )
+  }
+  display_term <- stats::setNames(display_order, pathway_order)
+
+  plot_list <- lapply(group_names, function(group_name) {
+    result <- ranked_list[[group_name]]
+    result <- result[
+      result$SelectedPathway %in% pathway_order, ,
+      drop = FALSE
+    ]
+    if (!nrow(result)) {
+      return(NULL)
+    }
+    result$Group <- group_name
+    result
+  })
+  enrichment_plot <- do.call(rbind, plot_list)
+  rownames(enrichment_plot) <- NULL
+  enrichment_plot <- dplyr::left_join(
+    tidyr::expand_grid(
+      SelectedPathway = pathway_order,
+      Group = group_names
+    ),
+    enrichment_plot,
+    by = c("SelectedPathway", "Group")
+  )
+  enrichment_plot[[pathway_column]] <- enrichment_plot$SelectedPathway
+  enrichment_plot$PlotP <- enrichment_plot[[p_column]]
+  enrichment_plot$PlotP <- pmax(
+    enrichment_plot$PlotP,
+    .Machine$double.xmin
+  )
+  enrichment_plot$LogP <- -log10(enrichment_plot$PlotP)
+  if (!is.null(max_logp)) {
+    enrichment_plot$LogP <- pmin(enrichment_plot$LogP, max_logp)
+  }
+  enrichment_plot[[pathway_column]] <- factor(
+    enrichment_plot[[pathway_column]],
+    levels = rev(pathway_order)
+  )
+  enrichment_plot$DisplayTerm <- factor(
+    unname(display_term[enrichment_plot$SelectedPathway]),
+    levels = rev(display_order)
+  )
+  enrichment_plot$Group <- factor(
+    enrichment_plot$Group,
+    levels = group_names
+  )
+
+  color_title <- paste0("-log10(", p_column, ")")
+  if (!is.null(max_logp)) {
+    color_title <- paste0(color_title, "\n(max ", max_logp, ")")
+  }
+
+  dotplot <- ggplot2::ggplot(
+    enrichment_plot,
+    ggplot2::aes(
+      x = .data[["Group"]],
+      y = .data[["DisplayTerm"]]
+    )
+  ) +
+    ggplot2::geom_point(
+      ggplot2::aes(
+        size = .data[["Count"]],
+        color = .data[["LogP"]]
+      ),
+      na.rm = TRUE
+    ) +
+    ggplot2::scale_color_gradient(
+      low = low_color,
+      high = high_color,
+      na.value = na_color,
+      name = color_title
+    ) +
+    ggplot2::labs(
+      x = "Group",
+      y = "Pathway",
+      size = "Count"
+    ) +
+    ggplot2::theme_test(base_size = 12) +
+    ggplot2::theme(
+      axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, vjust = 1)
+    )
+
+  list(
+    dotplot = dotplot,
+    table = enrichment_plot
+  )
+}
+
+
 #' Draw a customized GO enrichment dot plot
 #'
 #' Selects terms from an enrichment result, calculates gene counts, caps very
@@ -1363,411 +1788,6 @@ go_plot_custom <- function(Enricher, select_term, color, Label, pmin) {
       low = brewer.pal(9, color)[6],
       high = brewer.pal(9, color)[9]
     )
-}
-
-
-#' Plot enrichment trees for DESeq2 gene sets
-#'
-#' Splits an annotated DESeq2 result into upregulated, downregulated, and all
-#' differential genes, runs human GO and KEGG enrichment, and creates semantic
-#' similarity tree plots for each set.
-#'
-#' @param deg.df Annotated DESeq2 result containing `Entrez`, `padj`, and
-#'   `log2FoldChange`.
-#' @param label Character label identifying the comparison.
-#' @param pv Adjusted P-value threshold.
-#' @param lfc Absolute log2 fold-change threshold.
-#'
-#' @return A list containing gene counts, enrichment objects for each direction,
-#'   the comparison label, and a named list of plots.
-#' @export
-GO_BP_treeplot_DESeq2 <- function(deg.df, label, pv = 0.05, lfc = log2(1.5)) {
-  #  deg.df <- HMGA2_sh2.DESeq2.result$result
-  #  label <- "shHMGA2"
-  up.entrez <- (deg.df %>% filter(padj < pv, log2FoldChange > lfc))$Entrez
-  dw.entrez <- (deg.df %>% filter(padj < pv, log2FoldChange < -lfc))$Entrez
-  up.entrez <- unique(na.omit(up.entrez))
-  dw.entrez <- unique(na.omit(dw.entrez))
-  deg.entrez <- unique(c(up.entrez, dw.entrez))
-  color <- "YlGnBu"
-  up.enricher <- enrich_combind(
-    up.entrez,
-    species = "human",
-    reactome = FALSE,
-    hallmark = FALSE
-  )
-  dw.enricher <- enrich_combind(
-    dw.entrez,
-    species = "human",
-    reactome = FALSE,
-    hallmark = FALSE
-  )
-  deg.enricher <- enrich_combind(
-    deg.entrez,
-    species = "human",
-    reactome = FALSE,
-    hallmark = FALSE
-  )
-  ################## go_bp
-  ego_bp.up2 <- enrichplot::pairwise_termsim(up.enricher$ego_bp)
-  ego_bp.dw2 <- enrichplot::pairwise_termsim(dw.enricher$ego_bp)
-  ego_bp.deg2 <- enrichplot::pairwise_termsim(deg.enricher$ego_bp)
-
-  p_up_bp <- enrichplot::treeplot(
-    ego_bp.up2,
-    nCluster = 5,
-    group_color = brewer.pal(5, "Set1"),
-    hclust_methd = "average",
-    offset = 10
-  ) +
-    scale_colour_gradient(
-      high = brewer.pal(9, color)[6],
-      low = brewer.pal(9, color)[9]
-    ) +
-    ggtitle(
-      label = paste0(
-        "Up-regulated Genes in GO_BP (",
-        label,
-        " n= ",
-        length(up.entrez),
-        ")"
-      )
-    )
-  p_dw_bp <- enrichplot::treeplot(
-    ego_bp.dw2,
-    nCluster = 5,
-    group_color = brewer.pal(5, "Set1"),
-    hclust_methd = "average",
-    offset = 10
-  ) +
-    scale_colour_gradient(
-      high = brewer.pal(9, color)[6],
-      low = brewer.pal(9, color)[9]
-    ) +
-    ggtitle(
-      label = paste0(
-        "Down-regulated Genes in GO_BP (",
-        label,
-        " n= ",
-        length(dw.entrez),
-        ")"
-      )
-    )
-  p_deg_bp <- enrichplot::treeplot(
-    ego_bp.deg2,
-    nCluster = 5,
-    group_color = brewer.pal(5, "Set1"),
-    hclust_methd = "average",
-    offset = 10
-  ) +
-    scale_colour_gradient(
-      high = brewer.pal(9, color)[6],
-      low = brewer.pal(9, color)[9]
-    ) +
-    ggtitle(
-      label = paste0(
-        "Diff. Expr. Genes in GO_BP (",
-        label,
-        " n= ",
-        length(deg.entrez),
-        ")"
-      )
-    )
-  ################## kegg
-  ekg.up2 <- enrichplot::pairwise_termsim(up.enricher$ekg)
-  ekg.dw2 <- enrichplot::pairwise_termsim(dw.enricher$ekg)
-  ekg.deg2 <- enrichplot::pairwise_termsim(deg.enricher$ekg)
-
-  p_up_kegg <- enrichplot::treeplot(
-    ekg.up2,
-    nCluster = 5,
-    group_color = brewer.pal(5, "Set1"),
-    hclust_methd = "average",
-    offset = 10
-  ) +
-    scale_colour_gradient(
-      high = brewer.pal(9, color)[6],
-      low = brewer.pal(9, color)[9]
-    ) +
-    ggtitle(
-      label = paste0(
-        "Up-regulated Genes in KEGG pathway (",
-        label,
-        " n= ",
-        length(up.entrez),
-        ")"
-      )
-    )
-  p_dw_kegg <- enrichplot::treeplot(
-    ekg.dw2,
-    nCluster = 5,
-    group_color = brewer.pal(5, "Set1"),
-    hclust_methd = "average",
-    offset = 10
-  ) +
-    scale_colour_gradient(
-      high = brewer.pal(9, color)[6],
-      low = brewer.pal(9, color)[9]
-    ) +
-    ggtitle(
-      label = paste0(
-        "Down-regulated Genes in KEGG pathway (",
-        label,
-        " n= ",
-        length(dw.entrez),
-        ")"
-      )
-    )
-  p_deg_kegg <- enrichplot::treeplot(
-    ekg.deg2,
-    nCluster = 5,
-    group_color = brewer.pal(5, "Set1"),
-    hclust_methd = "average",
-    offset = 10
-  ) +
-    scale_colour_gradient(
-      high = brewer.pal(9, color)[6],
-      low = brewer.pal(9, color)[9]
-    ) +
-    ggtitle(
-      label = paste0(
-        "Diff. Expr. Genes in KEGG pathway (",
-        label,
-        " n= ",
-        length(deg.entrez),
-        ")"
-      )
-    )
-
-  ###################
-
-  p_combind_up <- enricher_plot(up.enricher) +
-    ggtitle(
-      label = paste0(
-        "Up-regulated Genes Enrichment Analysis(",
-        label,
-        " n= ",
-        length(up.entrez),
-        ")"
-      )
-    )
-  p_combind_dw <- enricher_plot(dw.enricher) +
-    ggtitle(
-      label = paste0(
-        "Down-regulated Genes Enrichment Analysis(",
-        label,
-        " n= ",
-        length(dw.entrez),
-        ")"
-      )
-    )
-  p_combind_deg <- enricher_plot(deg.enricher) +
-    ggtitle(
-      label = paste0(
-        "Diff. Expr. Genes Enrichment Analysis(",
-        label,
-        " n= ",
-        length(deg.entrez),
-        ")"
-      )
-    )
-
-  plot.ls <- list()
-  plot.ls[["ego_bp_up"]] <- p_up_bp
-  plot.ls[["ego_bp_dw"]] <- p_dw_bp
-  plot.ls[["ego_bp_deg"]] <- p_deg_bp
-  plot.ls[["ekg_up"]] <- p_up_kegg
-  plot.ls[["ekg_dw"]] <- p_dw_kegg
-  plot.ls[["ekg_deg"]] <- p_deg_kegg
-  plot.ls[["combind_up"]] <- p_combind_up
-  plot.ls[["combind_dw"]] <- p_combind_dw
-  plot.ls[["combind_deg"]] <- p_combind_deg
-
-  result <- list()
-  result[["label"]] <- label
-  result[["up_num"]] <- length(up.entrez)
-  result[["dw_num"]] <- length(dw.entrez)
-  result[["deg_num"]] <- length(deg.entrez)
-  result[["up_enricher"]] <- up.enricher
-  result[["dw_enricher"]] <- dw.enricher
-  result[["deg_enricher"]] <- deg.enricher
-  result[["plot"]] <- plot.ls
-
-  return(result)
-}
-
-
-#' Plot enrichment trees for single-cell marker genes
-#'
-#' Converts human marker symbols to Entrez identifiers, separates upregulated
-#' and downregulated markers, performs GO and KEGG enrichment, and creates
-#' semantic similarity tree plots.
-#'
-#' @param deg.df Single-cell marker data frame with gene symbols as row names and
-#'   `p_val` and `avg_log2FC` columns.
-#' @param label Character label identifying the comparison.
-#' @param pv P-value threshold.
-#' @param lfc Absolute average log2 fold-change threshold.
-#'
-#' @return A list containing gene counts, directional enrichment objects, the
-#'   comparison label, and a named list of plots.
-#' @export
-GO_BP_treeplot_scRNAseq <- function(deg.df, label, pv = 0.05, lfc = 0.25) {
-  #  deg.df <- XGJ.NEMOBvsNEMOA.degs
-  #  label <- "NEMOBvsNEMOA"
-  if (!requireNamespace("MAGeCKFlute", quietly = TRUE)) {
-    stop("Package 'MAGeCKFlute' is required to convert gene IDs.")
-  }
-  deg.df$Entrez <- suppressPackageStartupMessages(
-    MAGeCKFlute::TransGeneID(
-      rownames(deg.df),
-      "Symbol",
-      "Entrez",
-      organism = "hsa"
-    )
-  )
-  up.entrez <- (deg.df %>% filter(p_val < pv, avg_log2FC > lfc))$Entrez
-  dw.entrez <- (deg.df %>% filter(p_val < pv, avg_log2FC < -lfc))$Entrez
-  up.entrez <- unique(na.omit(up.entrez))
-  dw.entrez <- unique(na.omit(dw.entrez))
-  color <- "YlGnBu"
-  up.enricher <- enrich_combind(
-    up.entrez,
-    species = "human",
-    reactome = FALSE,
-    hallmark = FALSE
-  )
-  dw.enricher <- enrich_combind(
-    dw.entrez,
-    species = "human",
-    reactome = FALSE,
-    hallmark = FALSE
-  )
-  ################## go_bp
-  ego_bp.up2 <- enrichplot::pairwise_termsim(up.enricher$ego_bp)
-  ego_bp.dw2 <- enrichplot::pairwise_termsim(dw.enricher$ego_bp)
-  p_up_bp <- enrichplot::treeplot(
-    ego_bp.up2,
-    nCluster = 5,
-    group_color = brewer.pal(5, "Set1"),
-    hclust_methd = "average",
-    offset = 10
-  ) +
-    scale_colour_gradient(
-      high = brewer.pal(9, color)[6],
-      low = brewer.pal(9, color)[9]
-    ) +
-    ggtitle(
-      label = paste0(
-        "Up-regulated Genes in GO_BP (",
-        label,
-        " n= ",
-        length(up.entrez),
-        ")"
-      )
-    )
-  p_dw_bp <- enrichplot::treeplot(
-    ego_bp.dw2,
-    nCluster = 5,
-    group_color = brewer.pal(5, "Set1"),
-    hclust_methd = "average",
-    offset = 10
-  ) +
-    scale_colour_gradient(
-      high = brewer.pal(9, color)[6],
-      low = brewer.pal(9, color)[9]
-    ) +
-    ggtitle(
-      label = paste0(
-        "Down-regulated Genes in GO_BP (",
-        label,
-        " n= ",
-        length(dw.entrez),
-        ")"
-      )
-    )
-  ################## kegg
-  ekg.up2 <- enrichplot::pairwise_termsim(up.enricher$ekg)
-  ekg.dw2 <- enrichplot::pairwise_termsim(dw.enricher$ekg)
-  p_up_kegg <- enrichplot::treeplot(
-    ekg.up2,
-    nCluster = 5,
-    group_color = brewer.pal(5, "Set1"),
-    hclust_methd = "average",
-    offset = 10
-  ) +
-    scale_colour_gradient(
-      high = brewer.pal(9, color)[6],
-      low = brewer.pal(9, color)[9]
-    ) +
-    ggtitle(
-      label = paste0(
-        "Up-regulated Genes in KEGG pathway (",
-        label,
-        " n= ",
-        length(up.entrez),
-        ")"
-      )
-    )
-  p_dw_kegg <- enrichplot::treeplot(
-    ekg.dw2,
-    nCluster = 5,
-    group_color = brewer.pal(5, "Set1"),
-    hclust_methd = "average",
-    offset = 10
-  ) +
-    scale_colour_gradient(
-      high = brewer.pal(9, color)[6],
-      low = brewer.pal(9, color)[9]
-    ) +
-    ggtitle(
-      label = paste0(
-        "Down-regulated Genes in KEGG pathway (",
-        label,
-        " n= ",
-        length(dw.entrez),
-        ")"
-      )
-    )
-  ###################
-
-  p_combind_up <- enricher_plot(up.enricher) +
-    ggtitle(
-      label = paste0(
-        "Up-regulated Genes Enrichment Analysis(",
-        label,
-        " n= ",
-        length(up.entrez),
-        ")"
-      )
-    )
-  p_combind_dw <- enricher_plot(dw.enricher) +
-    ggtitle(
-      label = paste0(
-        "Down-regulated Genes Enrichment Analysis(",
-        label,
-        " n= ",
-        length(dw.entrez),
-        ")"
-      )
-    )
-  plot.ls <- list()
-  plot.ls[["ego_bp_up"]] <- p_up_bp
-  plot.ls[["ego_bp_dw"]] <- p_dw_bp
-  plot.ls[["ekg_up"]] <- p_up_kegg
-  plot.ls[["ekg_dw"]] <- p_dw_kegg
-  plot.ls[["combind_up"]] <- p_combind_up
-  plot.ls[["combind_dw"]] <- p_combind_dw
-
-  result <- list()
-  result[["label"]] <- label
-  result[["up_num"]] <- length(up.entrez)
-  result[["dw_num"]] <- length(dw.entrez)
-  result[["up_enricher"]] <- up.enricher
-  result[["dw_enricher"]] <- dw.enricher
-  result[["plot"]] <- plot.ls
-
-  return(result)
 }
 
 
