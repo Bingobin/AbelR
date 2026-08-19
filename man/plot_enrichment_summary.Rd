@@ -11,6 +11,7 @@ plot_enrichment_summary(
   pathway_column = c("ID", "Description"),
   top_n = 20,
   label_pathways = NULL,
+  exclude_pathways = NULL,
   group_order = NULL,
   sentence_case = FALSE,
   low_color = "grey90",
@@ -45,6 +46,10 @@ named numeric vector to set different values for different groups. Set to
 selected \code{pathway_column}. These pathways are placed first from top to
 bottom in the supplied order. Automatically selected pathways not already
 listed are appended.}
+
+\item{exclude_pathways}{Optional character vector containing values from the
+selected \code{pathway_column} that must not be displayed. Exclusion is applied
+before \code{top_n} selection and takes precedence over \code{label_pathways}.}
 
 \item{group_order}{Optional character vector specifying the left-to-right
 order of groups. The input list order is used by default.}

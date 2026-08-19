@@ -375,7 +375,7 @@ test_that("plot_enrichment_summary compares pathway counts across groups", {
     c("GroupA", "GroupB")
   )
   expect_equal(summary$dotplot$labels$x, "Group")
-  expect_equal(summary$dotplot$labels$y, "Pathway")
+  expect_equal(summary$dotplot$labels$y, "C2_CP_KEGG_LEGACY pathway")
   expect_equal(summary$dotplot$labels$size, "Count")
 })
 
@@ -419,6 +419,10 @@ test_that("plot_enrichment_summary selects one database from nested groups", {
   )
   expect_equal(summary$dotplot$scales$scales[[1]]$palette(c(0, 1)),
     c("#FFFFFF", "#006400")
+  )
+  expect_equal(
+    summary$dotplot$labels$y,
+    "C2_CP_KEGG_LEGACY pathway"
   )
 })
 
@@ -530,10 +534,58 @@ test_that("plot_enrichment_summary sentence-cases pathway IDs", {
 
   expect_equal(
     rev(levels(summary$table$DisplayTerm)),
-    c("Gobp pigmentation", "Gobp protein folding")
+    c("Pigmentation", "Protein folding")
   )
   expect_equal(
     as.character(summary$table$ID),
     c("GOBP_PIGMENTATION", "GOBP_PROTEIN-FOLDING")
   )
+  expect_equal(summary$dotplot$labels$y, "C5_GO_BP pathway")
+})
+
+test_that("plot_enrichment_summary excludes pathways before top selection", {
+  results <- list(
+    GroupA = make_enrichment_result(
+      "H",
+      c("Description A", "Description B", "Description C"),
+      c(0.001, 0.01, 0.02),
+      c(10, 8, 6)
+    ),
+    GroupB = make_enrichment_result(
+      "H",
+      c("Description A", "Description B", "Description C"),
+      c(0.002, 0.03, 0.01),
+      c(9, 5, 7)
+    )
+  )
+
+  summary <- plot_enrichment_summary(
+    results,
+    top_n = 1,
+    exclude_pathways = "ID1"
+  )
+
+  expect_false("ID1" %in% summary$table$SelectedPathway)
+  expect_setequal(summary$table$SelectedPathway, c("ID2", "ID3"))
+  expect_equal(nrow(summary$table), 4L)
+})
+
+test_that("plot_enrichment_summary gives exclusion precedence", {
+  result <- make_enrichment_result(
+    "H",
+    c("Description A", "Description B"),
+    c(0.01, 0.02),
+    c(5, 8)
+  )
+
+  expect_warning(
+    summary <- plot_enrichment_summary(
+      result,
+      top_n = 1,
+      label_pathways = "ID1",
+      exclude_pathways = "ID1"
+    ),
+    "Removing excluded pathways"
+  )
+  expect_equal(summary$table$SelectedPathway, "ID2")
 })

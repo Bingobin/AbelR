@@ -1349,6 +1349,9 @@ plot_gsea_summary <- function(
 #'   selected `pathway_column`. These pathways are placed first from top to
 #'   bottom in the supplied order. Automatically selected pathways not already
 #'   listed are appended.
+#' @param exclude_pathways Optional character vector containing values from the
+#'   selected `pathway_column` that must not be displayed. Exclusion is applied
+#'   before `top_n` selection and takes precedence over `label_pathways`.
 #' @param group_order Optional character vector specifying the left-to-right
 #'   order of groups. The input list order is used by default.
 #' @param sentence_case Logical. If `TRUE`, replace hyphens and underscores in
@@ -1373,6 +1376,7 @@ plot_enrichment_summary <- function(
   pathway_column = c("ID", "Description"),
   top_n = 20,
   label_pathways = NULL,
+  exclude_pathways = NULL,
   group_order = NULL,
   sentence_case = FALSE,
   low_color = "grey90",
@@ -1404,6 +1408,19 @@ plot_enrichment_summary <- function(
   label_pathways <- label_pathways[
     !is.na(label_pathways) & nzchar(label_pathways)
   ]
+  exclude_pathways <- unique(as.character(exclude_pathways))
+  exclude_pathways <- exclude_pathways[
+    !is.na(exclude_pathways) & nzchar(exclude_pathways)
+  ]
+  conflicting_pathways <- intersect(label_pathways, exclude_pathways)
+  if (length(conflicting_pathways)) {
+    warning(
+      "Removing excluded pathways from label_pathways: ",
+      paste(conflicting_pathways, collapse = ", "),
+      call. = FALSE
+    )
+    label_pathways <- setdiff(label_pathways, exclude_pathways)
+  }
 
   is_result_container <- is.list(enrichment_result) &&
     !is.data.frame(enrichment_result)
@@ -1592,6 +1609,10 @@ plot_enrichment_summary <- function(
       drop = FALSE
     ]
     result <- result[
+      !result$SelectedPathway %in% exclude_pathways, ,
+      drop = FALSE
+    ]
+    result <- result[
       order(result[[p_column]], -result$Count, na.last = TRUE), ,
       drop = FALSE
     ]
@@ -1646,7 +1667,38 @@ plot_enrichment_summary <- function(
     )
   }
 
-  display_order <- pathway_order
+  selected_database <- if (!is.null(database)) {
+    database
+  } else if (length(observed_databases) == 1L) {
+    observed_databases
+  } else {
+    NULL
+  }
+  has_database_prefix <- grepl("^[A-Z][A-Z0-9]*_", pathway_order)
+  database_prefix <- sub("_.*$", "", pathway_order)
+  common_prefix <- if (
+    all(has_database_prefix) && length(unique(database_prefix)) == 1L
+  ) {
+    unique(database_prefix)
+  } else {
+    NULL
+  }
+  if (is.null(common_prefix)) {
+    display_order <- pathway_order
+  } else {
+    display_order <- sub(
+      paste0("^", common_prefix, "_+"),
+      "",
+      pathway_order
+    )
+  }
+  pathway_axis_title <- if (!is.null(selected_database)) {
+    paste(selected_database, "pathway")
+  } else if (!is.null(common_prefix)) {
+    paste(common_prefix, "pathway")
+  } else {
+    "Pathway"
+  }
   if (sentence_case) {
     display_order <- gsub("[-_]+", " ", display_order)
     display_order <- gsub("[[:space:]]+", " ", trimws(display_order))
@@ -1730,7 +1782,7 @@ plot_enrichment_summary <- function(
     ) +
     ggplot2::labs(
       x = "Group",
-      y = "Pathway",
+      y = pathway_axis_title,
       size = "Count"
     ) +
     ggplot2::theme_test(base_size = 12) +
