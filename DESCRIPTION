@@ -1,12 +1,12 @@
 Package: AbelR
 Title: Personal Bioinformatics Analysis and Visualization Functions
 Version: 0.1.0.9000
-Authors@R: person("AbelR", "Authors", email = "maintainer@example.com", role = c("aut", "cre"))
+Authors@R: person("Yabin", "Liu", email = "maintainer@example.com", role = c("aut", "cre"))
 Description: A personal collection of reusable functions for bioinformatics
     analysis, statistical modelling, and scientific visualization, including
     bulk RNA-seq, single-cell RNA-seq, survival analysis, enrichment analysis,
     and ChIP-seq workflows.
-License: MIT + file LICENSE
+License: GPL-3
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2
