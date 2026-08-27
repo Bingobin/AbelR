@@ -672,37 +672,59 @@ EnrichMSigDB <- function(
 }
 
 
-#' Draw a customized GSEA running-score plot
+#' Draw a custom GSEA running-score plot
 #'
 #' Builds a three-panel GSEA plot showing the enrichment score, ranked gene
-#' positions, and ranked-list metric for one selected gene set.
+#' positions, and ranked-list metric for one selected gene set. The enrichment
+#' panel reports NES, the nominal P value, and the adjusted P value.
 #'
 #' @param gsea_ob A GSEA result object compatible with `enrichplot`.
 #' @param select_term Row index or term selection passed to the internal GSEA
 #'   plotting data extractor.
 #' @param color Colour used for the enrichment-score line and annotation.
-#' @param xpos X coordinate used to position the NES and adjusted P-value label.
+#' @param xpos X coordinate used to position the statistics label.
+#' @param running_score_limits Optional numeric vector of length two giving the
+#'   lower and upper limits of the Running Enrichment Score axis. The complete
+#'   data are retained and the displayed range is zoomed to these limits. Use
+#'   `NULL` (the default) for automatic limits.
 #'
 #' @return A combined cowplot drawing object.
 #' @export
-gsea_plot_custorm <- function(gsea_ob, select_term, color, xpos = 3000) {
-  # gsea_ob <- aml_phenolyzer.gsea.crc
-  # select_term <- 1
-  # color <- "#08537C"
+gsea_plot_custom <- function(
+  gsea_ob,
+  select_term,
+  color,
+  xpos = 3000,
+  running_score_limits = NULL
+) {
+  running_score_limits <- .validate_running_score_limits(running_score_limits)
   nes <- round(gsea_ob@result[select_term, "NES"], digits = 2)
-  pv <- formatC(
+  p_value <- formatC(
+    gsea_ob@result[select_term, "pvalue"],
+    format = "e",
+    digits = 2
+  )
+  p_adjust <- formatC(
     gsea_ob@result[select_term, "p.adjust"],
     format = "e",
     digits = 2
   )
-  # pv <- round(gsea_ob@result[select_term,"p.adjust"], digits = 6)
-  # pv <- round(gsea_ob@result[select_term,"pvalue"], digits = 6)
+  statistics_label <- paste0(
+    "NES = ", nes,
+    "\nP value = ", p_value,
+    "\nAdjusted P value = ", p_adjust
+  )
   gs_info <- utils::getFromNamespace("gsInfo", "enrichplot")
   gsdata <- do.call(
     rbind,
     lapply(select_term, gs_info, object = gsea_ob)
   )
-  ypos <- sign(nes) * max(abs(gsdata$runningScore)) / 2
+  score_range <- if (is.null(running_score_limits)) {
+    range(c(0, gsdata$runningScore), finite = TRUE)
+  } else {
+    running_score_limits
+  }
+  ypos <- .gsea_statistics_y_position(nes, score_range)
   title_text <- gsea_ob@result[select_term, "Description"]
   title_text <- gsub("^HALLMARK[_ ]*", "", title_text, ignore.case = TRUE)
   title_text <- gsub("_+", " ", title_text)
@@ -715,64 +737,63 @@ gsea_plot_custorm <- function(gsea_ob, select_term, color, xpos = 3000) {
     dplyr::ungroup()
 
   p_gsea_1 <- ggplot(gsdata_thin, aes(x = x, y = runningScore)) +
-    geom_line(aes(color = Description), size = 1, show.legend = FALSE) +
+    geom_line(aes(color = Description), linewidth = 1, show.legend = FALSE) +
     blank +
     theme(
-      panel.border = element_rect(fill = NA, linetype = 1, size = 1),
+      panel.border = element_rect(fill = NA, linetype = 1, linewidth = 1),
       axis.line = element_blank()
     ) +
     geom_hline(yintercept = 0, linetype = 2) +
     scale_color_manual(values = color) +
-    # theme(legend.position = c(.95, .95), legend.justification = c("right", "top")) +
     theme(axis.ticks.x = element_blank(), axis.text.x = element_blank()) +
     xlab("") +
     ylab("Running enrichment score") +
-    annotate("text", label = paste0("NES = ", nes), x = xpos, y = ypos) +
     annotate(
       "text",
-      label = paste0("p.adjust = ", pv),
+      label = statistics_label,
       x = xpos,
-      y = ypos - 0.05
+      y = ypos,
+      lineheight = 1.1
     ) +
-    # annotate("text", label = paste0("P value = ", pv), x=xpos,y= ypos -0.05) +
     theme(plot.margin = margin(t = 0.2, r = 0.2, b = 0, l = 0.2, unit = "cm"))
 
-  p_gsea_2 <- ggplot(gsdata, aes_(x = ~x)) +
+  if (!is.null(running_score_limits)) {
+    p_gsea_1 <- p_gsea_1 + coord_cartesian(
+      ylim = running_score_limits,
+      expand = FALSE
+    )
+  }
+
+  p_gsea_2 <- ggplot(gsdata, aes(x = x)) +
     rasterise(
       geom_linerange(
-        aes_(ymin = ~ymin, ymax = ~ymax),
+        aes(ymin = ymin, ymax = ymax),
         color = color,
         show.legend = FALSE,
         alpha = 0.6,
-        size = 0.4
+        linewidth = 0.4
       ),
       dpi = 300
     ) +
-    # geom_linerange(aes_(ymin = ~ymin, ymax = ~ymax),color=color, show.legend = FALSE,alpha =0.6,size = 0.4) +
     blank +
     xlab(NULL) +
     theme(axis.ticks = element_blank(), axis.text = element_blank()) +
     theme(
-      panel.border = element_rect(fill = NA, linetype = 1, size = 1),
+      panel.border = element_rect(fill = NA, linetype = 1, linewidth = 1),
       axis.line = element_blank()
     ) +
-    # geom_hline(yintercept = 0) +
     theme(plot.margin = margin(t = -0.5, r = 0.2, b = 0, l = 1.2, unit = "cm"))
 
-  p_gsea_3 <- ggplot(gsdata, aes_(x = ~x, y = ~geneList)) +
-    # rasterise(geom_segment(aes_(xend = ~x, yend = 0), color = color, show.legend = FALSE)) +
+  p_gsea_3 <- ggplot(gsdata, aes(x = x, y = geneList)) +
     rasterise(
       geom_area(color = color, fill = color, show.legend = FALSE),
       dpi = 300
     ) +
-    # geom_area(color = color, fill = color, show.legend = FALSE) +
-    #  scale_colour_gradient(low= brewer.pal(9,"Blues")[6], high =  brewer.pal(9,"Blues")[9]) +
-    ylab("Ranked list matric") +
+    ylab("Ranked list metric") +
     xlab("Rank in ordered dataset") +
-    # scale_y_continuous(n.breaks = 3)+
     blank +
     theme(
-      panel.border = element_rect(fill = NA, linetype = 1, size = 1),
+      panel.border = element_rect(fill = NA, linetype = 1, linewidth = 1),
       axis.line = element_blank()
     ) +
     theme(
@@ -787,7 +808,6 @@ gsea_plot_custorm <- function(gsea_ob, select_term, color, xpos = 3000) {
     rel_heights = c(8, 0.8, 4),
     align = "v"
   )
-  # plot_grid(p_gsea_1, p_gsea_2, nrow= 2, rel_heights = c(8,1), align = "v")
 
   final_plot <- ggdraw() +
     draw_label(
@@ -802,6 +822,43 @@ gsea_plot_custorm <- function(gsea_ob, select_term, color, xpos = 3000) {
     draw_plot(gsea_body, y = 0, height = 0.94)
 
   return(final_plot)
+}
+
+
+.validate_running_score_limits <- function(running_score_limits) {
+  if (is.null(running_score_limits)) {
+    return(NULL)
+  }
+  if (!is.numeric(running_score_limits) ||
+    length(running_score_limits) != 2L ||
+    any(!is.finite(running_score_limits))) {
+    stop(
+      "running_score_limits must be NULL or two finite numeric values.",
+      call. = FALSE
+    )
+  }
+  if (running_score_limits[1] >= running_score_limits[2]) {
+    stop(
+      "running_score_limits must be ordered from lower to upper.",
+      call. = FALSE
+    )
+  }
+  unname(running_score_limits)
+}
+
+
+.gsea_statistics_y_position <- function(nes, score_range) {
+  midpoint <- mean(score_range)
+  if (!is.finite(nes) || nes == 0) {
+    return(midpoint)
+  }
+  if (nes > 0 && score_range[2] > 0) {
+    return(mean(c(max(0, score_range[1]), score_range[2])))
+  }
+  if (nes < 0 && score_range[1] < 0) {
+    return(mean(c(score_range[1], min(0, score_range[2]))))
+  }
+  midpoint
 }
 
 

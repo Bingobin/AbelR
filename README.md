@@ -148,7 +148,7 @@ Source: `R/enrichment.R`
 |---|---|
 | `EnrichMSigDB()` | Run human or mouse MSigDB over-representation analysis for one or more selected gene-set databases. |
 | `enrich_combind()` | Unified GO analysis with optional KEGG, Reactome, Hallmark, and WikiPathways results. |
-| `gsea_plot_custorm()` | Build a customized GSEA running-score plot for selected terms. |
+| `gsea_plot_custom()` | Build a custom GSEA running-score plot with configurable score-axis limits and P-value labels. |
 | `plot_enrichment_summary()` | Compare over-representation enrichment pathways across groups using gene counts and a selected P-value metric. |
 | `plot_gsea_summary()` | Compare selected GSEA pathways across groups using a dot plot, NES heatmap, and matched result table. |
 | `go_plot_custom()` | Draw a customized GO enrichment plot for selected terms. |

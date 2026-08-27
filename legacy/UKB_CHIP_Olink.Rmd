@@ -1637,11 +1637,11 @@ olink.or[is.na(olink.or$Entrez),]
 
 ```{r}
 plot.list1 <- lapply(c("hsa05202", "hsa05221", "hsa04672", "hsa04919"),function(x){
-  gsea_plot_custorm(gsea.kegg,x,"#7BA39D",xpos = 1000)
+  gsea_plot_custom(gsea.kegg,x,"#7BA39D",xpos = 1000)
 })
 
 plot.list2 <- lapply(c("hsa04151", "hsa04979", "hsa03320", "hsa04060"),function(x){
-  gsea_plot_custorm(gsea.kegg,x,"#3C5488",xpos = 1000)
+  gsea_plot_custom(gsea.kegg,x,"#3C5488",xpos = 1000)
 })
 
 plot_grid(plotlist = plot.list1)
@@ -1649,8 +1649,8 @@ plot_grid(plotlist = plot.list2)
 ```
 
 ```{r}
-gsea_plot_custorm(gsea.go_bp,"GO:0008015","#B5AA0F",xpos = 1000)
-gsea_plot_custorm(gsea.go_bp,"GO:0035295","#B5AA0F",xpos = 1000)
+gsea_plot_custom(gsea.go_bp,"GO:0008015","#B5AA0F",xpos = 1000)
+gsea_plot_custom(gsea.go_bp,"GO:0035295","#B5AA0F",xpos = 1000)
 
 gsea.plot <- gsea.go_bp@result |> select(Description, NES, pvalue, p.adjust) |>  top_n(n=40, wt = -pvalue)
 
@@ -2006,11 +2006,11 @@ write.table(gsea.go_bp@result |> filter(pvalue < 0.05), "chip_suppl_table_olinkg
 
 ```{r}
 plot.list1 <- lapply(c("hsa05202", "hsa05221", "hsa04672", "hsa04919"),function(x){
-  gsea_plot_custorm(gsea.kegg,x,"#7BA39D",xpos = 1000)
+  gsea_plot_custom(gsea.kegg,x,"#7BA39D",xpos = 1000)
 })
 
 plot.list2 <- lapply(c("hsa04151", "hsa04979", "hsa03320", "hsa04060"),function(x){
-  gsea_plot_custorm(gsea.kegg,x,"#3C5488",xpos = 1000)
+  gsea_plot_custom(gsea.kegg,x,"#3C5488",xpos = 1000)
 })
 
 plot_grid(plotlist = plot.list1)
@@ -2019,11 +2019,11 @@ plot_grid(plotlist = plot.list2)
 
 ```{r}
 plot.list1 <- lapply(c("GO:0006325", "GO:0002250", "GO:0045088"),function(x){
-  gsea_plot_custorm(gsea.go_bp,x,"#B5AA0F",xpos = 1000)
+  gsea_plot_custom(gsea.go_bp,x,"#B5AA0F",xpos = 1000)
 })
 
 plot.list2 <- lapply(c("GO:0097529", "GO:0060326", "GO:0008015"),function(x){
-  gsea_plot_custorm(gsea.go_bp,x,"#3C5488",xpos = 1000)
+  gsea_plot_custom(gsea.go_bp,x,"#3C5488",xpos = 1000)
 })
 
 plot.list1

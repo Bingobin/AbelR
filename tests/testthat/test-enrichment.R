@@ -64,6 +64,79 @@ test_that("MSigDB database names accept colon, underscore, and legacy forms", {
   expect_true(is.na(.abel_match_msigdb_database("H", "mouse")))
 })
 
+test_that("gsea_plot_custom validates running-score limits", {
+  expect_null(.validate_running_score_limits(NULL))
+  expect_identical(
+    .validate_running_score_limits(c(lower = -0.5, upper = 0.75)),
+    c(-0.5, 0.75)
+  )
+  expect_error(
+    .validate_running_score_limits(0.5),
+    "two finite numeric values"
+  )
+  expect_error(
+    .validate_running_score_limits(c(-Inf, 0.5)),
+    "two finite numeric values"
+  )
+  expect_error(
+    .validate_running_score_limits(c(0.5, -0.5)),
+    "ordered from lower to upper"
+  )
+})
+
+test_that("gsea_plot_custom displays nominal and adjusted P values", {
+  skip_if_not_installed("clusterProfiler")
+  skip_if_not_installed("enrichplot")
+
+  set.seed(1)
+  gene_list <- sort(
+    stats::setNames(stats::rnorm(100), paste0("g", seq_len(100))),
+    decreasing = TRUE
+  )
+  term2gene <- data.frame(
+    term = rep(c("HALLMARK_PATHWAY_A", "HALLMARK_PATHWAY_B"), each = 20),
+    gene = c(paste0("g", 1:20), paste0("g", 61:80))
+  )
+  gsea_result <- clusterProfiler::GSEA(
+    gene_list,
+    TERM2GENE = term2gene,
+    minGSSize = 5,
+    maxGSSize = 100,
+    pvalueCutoff = 1,
+    verbose = FALSE
+  )
+
+  plot <- gsea_plot_custom(
+    gsea_result,
+    select_term = 1,
+    color = "#08537C",
+    xpos = 50,
+    running_score_limits = c(-0.5, 0.75)
+  )
+  expect_s3_class(plot, "ggplot")
+
+  collect_labels <- function(grob) {
+    labels <- character()
+    if (!is.null(grob$label)) {
+      labels <- c(labels, as.character(grob$label))
+    }
+    if (!is.null(grob$grobs)) {
+      for (child in grob$grobs) {
+        labels <- c(labels, collect_labels(child))
+      }
+    }
+    if (!is.null(grob$children)) {
+      for (child in grob$children) {
+        labels <- c(labels, collect_labels(child))
+      }
+    }
+    labels
+  }
+  labels <- collect_labels(ggplot2::ggplotGrob(plot))
+  expect_true(any(grepl("P value =", labels, fixed = TRUE)))
+  expect_true(any(grepl("Adjusted P value =", labels, fixed = TRUE)))
+})
+
 make_gsea_result <- function(prefix, p_adjust) {
   pathway_id <- paste0(prefix, seq_along(p_adjust))
   data.frame(
