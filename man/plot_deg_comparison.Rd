@@ -5,13 +5,12 @@
 \title{Compare two differential-expression analyses}
 \usage{
 plot_deg_comparison(
-  deg_result1,
-  deg_result2,
-  label_1 = "Log2FoldChange in Sample1",
-  label_2 = "Log2FoldChange in Sample2",
+  x_deg_result,
+  y_deg_result,
+  x_label = NULL,
+  y_label = NULL,
   fc = 1.5,
-  pv = 0.05,
-  adjust = TRUE,
+  pvalue_cutoff = 0.05,
   pc = TRUE,
   bg_num = 5000,
   limit = 5,
@@ -20,26 +19,43 @@ plot_deg_comparison(
   plot_title = NULL,
   goi = NULL,
   top = 5,
-  label_size = 2.5
+  label_size = 2.5,
+  x_col = "log2FoldChange",
+  y_col = "log2FoldChange",
+  x_pvalue_col = "padj",
+  y_pvalue_col = "padj",
+  x_threshold = NULL,
+  y_threshold = NULL,
+  x_limits = NULL,
+  y_limits = NULL,
+  x_merge_col = "Row.names",
+  y_merge_col = "Row.names",
+  species = c("human", "mouse")
 )
 }
 \arguments{
-\item{deg_result1, deg_result2}{DEG result data frames containing compatible
-identifiers, fold changes, and P-value columns.}
+\item{x_deg_result, y_deg_result}{DEG result data frames supplying the
+horizontal and vertical values, respectively. They must contain compatible
+merge identifiers, selected numeric columns, and P-value columns.}
 
-\item{label_1, label_2}{Axis labels for the two analyses.}
+\item{x_label, y_label}{Optional axis labels. When \code{NULL}, labels are generated
+from \code{x_col} and \code{y_col}.}
 
-\item{fc}{Fold-change threshold on the linear scale.}
+\item{fc}{Fold-change threshold on the linear scale, retained for backward
+compatibility. \code{log2(fc)} is used for an axis whose explicit threshold is
+\code{NULL}.}
 
-\item{pv}{Significance threshold.}
+\item{pvalue_cutoff}{Significance threshold applied to both selected P-value
+columns.}
 
-\item{adjust}{Logical; compare \code{padj} when \code{TRUE}, otherwise \code{pvalue}.}
-
-\item{pc}{Logical; restrict the first result to protein-coding genes.}
+\item{pc}{Logical; restrict \code{x_deg_result} to protein-coding genes. If
+\code{Gene_Type} is absent, it is added from the bundled gene annotation for
+\code{species}.}
 
 \item{bg_num}{Maximum number of background genes sampled for display.}
 
-\item{limit}{Maximum absolute axis limit.}
+\item{limit}{Default maximum absolute limit used for an axis whose explicit
+limits are \code{NULL}.}
 
 \item{seed}{Random seed used for background sampling.}
 
@@ -47,17 +63,40 @@ identifiers, fold changes, and P-value columns.}
 
 \item{plot_title}{Optional plot title.}
 
-\item{goi}{Optional character vector of genes of interest to label.}
+\item{goi}{Optional character vector of gene symbols to label. Matched genes
+are labelled even when they are not significant. Symbols absent from the
+matched, filtered plotting data are reported in a warning.}
 
 \item{top}{Number of top genes labelled for each comparison group.}
 
 \item{label_size}{Text size for gene labels.}
+
+\item{x_col, y_col}{Numeric columns from \code{x_deg_result} and \code{y_deg_result}
+used for the horizontal and vertical axes, respectively.}
+
+\item{x_pvalue_col, y_pvalue_col}{Numeric significance columns from
+\code{x_deg_result} and \code{y_deg_result}, respectively. These may name raw P-value,
+adjusted P-value, FDR, or q-value columns and may differ between tables.}
+
+\item{x_threshold, y_threshold}{Non-negative absolute thresholds in the units
+of the selected axis columns. When \code{NULL}, \code{log2(fc)} is used.}
+
+\item{x_limits, y_limits}{Optional numeric vectors of length two specifying
+independent lower and upper display limits. When \code{NULL}, \code{c(-limit, limit)}
+is used.}
+
+\item{x_merge_col, y_merge_col}{Columns used to match rows from \code{x_deg_result}
+and \code{y_deg_result}, respectively. The columns may have different names but
+must contain compatible, non-duplicated identifiers.}
+
+\item{species}{Species used to annotate \code{Gene_Type} when \code{pc = TRUE} and the
+column is absent from \code{x_deg_result}. Either \code{"human"} or \code{"mouse"}.}
 }
 \value{
 A \link[ggplot2:ggplot]{ggplot2::ggplot} comparison plot.
 }
 \description{
-Merges two DEG result tables by gene identifier, classifies concordant and
-discordant fold-change patterns, optionally samples background genes, and
-draws a correlation plot with selected labels.
+Merges two DEG result tables by gene identifier, compares caller-selected
+numeric columns, classifies concordant and discordant patterns, optionally
+samples background genes, and draws a correlation plot with selected labels.
 }

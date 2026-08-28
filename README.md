@@ -79,7 +79,7 @@ Source: `R/deseq2.R`
 | `DESeq2_DEG_analysis()` | Run a two-group human or mouse DESeq2 analysis using the shared species-aware implementation. |
 | `DESeq2_DEG_analysis_batch()` | Run human or mouse DESeq2 analysis using the same `Group/Batch/Library` design and `GID` matrix format. |
 | `DESeq2_DEG_extract()` | Extract significantly upregulated and downregulated genes and optionally draw a heatmap. |
-| `Compare_pairwise_Deseq2()` | Compare fold changes from two DESeq2 result tables and highlight shared directional changes. |
+| `Compare_pairwise_Deseq2()` | Legacy fold-change-only comparison of two DESeq2 result tables; use `plot_deg_comparison()` for configurable columns, thresholds, and limits. |
 
 ```r
 bulk <- build_bulkRNA_batches(
@@ -109,7 +109,7 @@ Source: `R/deg-plots.R`
 | `volcano_plot_Deseq2()` | Draw a DESeq2 volcano plot with configurable significance thresholds and gene labels. |
 | `volcano_plot_scRNA()` | Draw a volcano plot for Seurat marker results and label the most significant upregulated and downregulated genes. |
 | `plot_deg_heatmap_for_DEGseq2()` | Draw a clustered DEG heatmap with optional labels for selected and top-ranked genes. |
-| `plot_deg_comparison()` | Compare two DEG analyses using fold-change groups, correlation statistics, and selected gene labels. |
+| `plot_deg_comparison()` | Compare caller-selected numeric and significance columns from two DEG analyses using configurable merge keys, thresholds, axis limits, correlation statistics, and gene labels; missing `Gene_Type` can be annotated from bundled human or mouse resources. |
 | `plot_deg_manhattan()` | Draw faceted Manhattan-style DEG plots based on genomic positions and signed significance scores. |
 
 ### Survival analysis

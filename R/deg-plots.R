@@ -598,36 +598,59 @@ volcano_plot_scRNA <- function(
 
 #' Compare two differential-expression analyses
 #'
-#' Merges two DEG result tables by gene identifier, classifies concordant and
-#' discordant fold-change patterns, optionally samples background genes, and
-#' draws a correlation plot with selected labels.
+#' Merges two DEG result tables by gene identifier, compares caller-selected
+#' numeric columns, classifies concordant and discordant patterns, optionally
+#' samples background genes, and draws a correlation plot with selected labels.
 #'
-#' @param deg_result1,deg_result2 DEG result data frames containing compatible
-#'   identifiers, fold changes, and P-value columns.
-#' @param label_1,label_2 Axis labels for the two analyses.
-#' @param fc Fold-change threshold on the linear scale.
-#' @param pv Significance threshold.
-#' @param adjust Logical; compare `padj` when `TRUE`, otherwise `pvalue`.
-#' @param pc Logical; restrict the first result to protein-coding genes.
+#' @param x_deg_result,y_deg_result DEG result data frames supplying the
+#'   horizontal and vertical values, respectively. They must contain compatible
+#'   merge identifiers, selected numeric columns, and P-value columns.
+#' @param x_label,y_label Optional axis labels. When `NULL`, labels are generated
+#'   from `x_col` and `y_col`.
+#' @param fc Fold-change threshold on the linear scale, retained for backward
+#'   compatibility. `log2(fc)` is used for an axis whose explicit threshold is
+#'   `NULL`.
+#' @param pvalue_cutoff Significance threshold applied to both selected P-value
+#'   columns.
+#' @param pc Logical; restrict `x_deg_result` to protein-coding genes. If
+#'   `Gene_Type` is absent, it is added from the bundled gene annotation for
+#'   `species`.
 #' @param bg_num Maximum number of background genes sampled for display.
-#' @param limit Maximum absolute axis limit.
+#' @param limit Default maximum absolute limit used for an axis whose explicit
+#'   limits are `NULL`.
 #' @param seed Random seed used for background sampling.
 #' @param show_cor Logical; display correlation statistics.
 #' @param plot_title Optional plot title.
-#' @param goi Optional character vector of genes of interest to label.
+#' @param goi Optional character vector of gene symbols to label. Matched genes
+#'   are labelled even when they are not significant. Symbols absent from the
+#'   matched, filtered plotting data are reported in a warning.
 #' @param top Number of top genes labelled for each comparison group.
 #' @param label_size Text size for gene labels.
+#' @param x_col,y_col Numeric columns from `x_deg_result` and `y_deg_result`
+#'   used for the horizontal and vertical axes, respectively.
+#' @param x_pvalue_col,y_pvalue_col Numeric significance columns from
+#'   `x_deg_result` and `y_deg_result`, respectively. These may name raw P-value,
+#'   adjusted P-value, FDR, or q-value columns and may differ between tables.
+#' @param x_threshold,y_threshold Non-negative absolute thresholds in the units
+#'   of the selected axis columns. When `NULL`, `log2(fc)` is used.
+#' @param x_limits,y_limits Optional numeric vectors of length two specifying
+#'   independent lower and upper display limits. When `NULL`, `c(-limit, limit)`
+#'   is used.
+#' @param x_merge_col,y_merge_col Columns used to match rows from `x_deg_result`
+#'   and `y_deg_result`, respectively. The columns may have different names but
+#'   must contain compatible, non-duplicated identifiers.
+#' @param species Species used to annotate `Gene_Type` when `pc = TRUE` and the
+#'   column is absent from `x_deg_result`. Either `"human"` or `"mouse"`.
 #'
 #' @return A [ggplot2::ggplot] comparison plot.
 #' @export
 plot_deg_comparison <- function(
-  deg_result1,
-  deg_result2,
-  label_1 = "Log2FoldChange in Sample1",
-  label_2 = "Log2FoldChange in Sample2",
+  x_deg_result,
+  y_deg_result,
+  x_label = NULL,
+  y_label = NULL,
   fc = 1.5,
-  pv = 0.05,
-  adjust = TRUE,
+  pvalue_cutoff = 0.05,
   pc = TRUE,
   bg_num = 5000,
   limit = 5,
@@ -636,133 +659,314 @@ plot_deg_comparison <- function(
   plot_title = NULL,
   goi = NULL,
   top = 5,
-  label_size = 2.5
+  label_size = 2.5,
+  x_col = "log2FoldChange",
+  y_col = "log2FoldChange",
+  x_pvalue_col = "padj",
+  y_pvalue_col = "padj",
+  x_threshold = NULL,
+  y_threshold = NULL,
+  x_limits = NULL,
+  y_limits = NULL,
+  x_merge_col = "Row.names",
+  y_merge_col = "Row.names",
+  species = c("human", "mouse")
 ) {
   if (!requireNamespace("ggrepel", quietly = TRUE)) {
     stop("Package 'ggrepel' is required for plot_deg_comparison().")
   }
 
-  # 选择P值列名
-  pval_col <- if (adjust) "padj" else "pvalue"
+  .validate_column_name <- function(column, argument, data, data_name) {
+    if (!is.character(column) || length(column) != 1L ||
+      is.na(column) || !nzchar(column)) {
+      stop(argument, " must be one non-empty column name.", call. = FALSE)
+    }
+    if (!column %in% colnames(data)) {
+      stop(
+        argument, " ('", column, "') was not found in ", data_name, ".",
+        call. = FALSE
+      )
+    }
+  }
 
-  # 提取并重命名列
-  degs_1 <- deg_result1 |>
-    select(Row.names, Symbol, Gene_Type, log2FoldChange, all_of(pval_col)) |>
-    rename(LFC_1 = log2FoldChange, PV_1 = all_of(pval_col))
+  .validate_column_name(x_col, "x_col", x_deg_result, "x_deg_result")
+  .validate_column_name(y_col, "y_col", y_deg_result, "y_deg_result")
+  .validate_column_name(
+    x_pvalue_col,
+    "x_pvalue_col",
+    x_deg_result,
+    "x_deg_result"
+  )
+  .validate_column_name(
+    y_pvalue_col,
+    "y_pvalue_col",
+    y_deg_result,
+    "y_deg_result"
+  )
+  .validate_column_name(
+    x_merge_col,
+    "x_merge_col",
+    x_deg_result,
+    "x_deg_result"
+  )
+  .validate_column_name(
+    y_merge_col,
+    "y_merge_col",
+    y_deg_result,
+    "y_deg_result"
+  )
+  .validate_column_name("Symbol", "Symbol", x_deg_result, "x_deg_result")
+  species <- .abel_normalize_species(species)
+  if (!is.null(goi) && !is.character(goi)) {
+    stop("goi must be NULL or a character vector of gene symbols.", call. = FALSE)
+  }
+  goi <- unique(goi[!is.na(goi) & nzchar(goi)])
+  if (!is.numeric(x_deg_result[[x_col]])) {
+    stop("x_col must select a numeric column in x_deg_result.", call. = FALSE)
+  }
+  if (!is.numeric(y_deg_result[[y_col]])) {
+    stop("y_col must select a numeric column in y_deg_result.", call. = FALSE)
+  }
+  if (!is.numeric(x_deg_result[[x_pvalue_col]]) ||
+    !is.numeric(y_deg_result[[y_pvalue_col]])) {
+    stop("The selected P-value columns must be numeric.", call. = FALSE)
+  }
+  if (!is.numeric(pvalue_cutoff) || length(pvalue_cutoff) != 1L ||
+    !is.finite(pvalue_cutoff) || pvalue_cutoff < 0 || pvalue_cutoff > 1) {
+    stop("pvalue_cutoff must be one number between 0 and 1.", call. = FALSE)
+  }
 
-  degs_2 <- deg_result2 |>
-    select(Row.names, log2FoldChange, all_of(pval_col)) |>
-    rename(LFC_2 = log2FoldChange, PV_2 = all_of(pval_col))
+  fallback_threshold <- NULL
+  if (is.null(x_threshold) || is.null(y_threshold)) {
+    if (!is.numeric(fc) || length(fc) != 1L || !is.finite(fc) || fc < 1) {
+      stop("fc must be one finite number greater than or equal to 1.", call. = FALSE)
+    }
+    fallback_threshold <- log2(fc)
+  }
+  x_threshold <- .validate_deg_axis_threshold(
+    x_threshold,
+    fallback_threshold,
+    "x_threshold"
+  )
+  y_threshold <- .validate_deg_axis_threshold(
+    y_threshold,
+    fallback_threshold,
+    "y_threshold"
+  )
+  x_limits <- .validate_deg_axis_limits(x_limits, limit, "x_limits")
+  y_limits <- .validate_deg_axis_limits(y_limits, limit, "y_limits")
 
-  # 合并数据
-  vs.degs <- degs_1 |>
-    inner_join(degs_2, by = "Row.names")
+  if (is.null(x_label)) {
+    x_label <- paste0(x_col, " in x_deg_result")
+  }
+  if (is.null(y_label)) {
+    y_label <- paste0(y_col, " in y_deg_result")
+  }
 
-  # 计算log2(fc)阈值
-  log2_fc <- log2(fc)
-
-  # 分类函数(考虑P值)
-  classify_with_pval <- function(lfc1, lfc2, pv1, pv2) {
-    case_when(
-      lfc1 > log2_fc & lfc2 > log2_fc & pv1 < pv & pv2 < pv ~ "upup",
-      lfc1 < -log2_fc & lfc2 < -log2_fc & pv1 < pv & pv2 < pv ~ "dwdw",
-      lfc1 > log2_fc & lfc2 < -log2_fc & pv1 < pv & pv2 < pv ~ "updw",
-      lfc1 < -log2_fc & lfc2 > log2_fc & pv1 < pv & pv2 < pv ~ "dwup",
-      TRUE ~ "other"
+  x_merge_key <- as.character(x_deg_result[[x_merge_col]])
+  y_merge_key <- as.character(y_deg_result[[y_merge_col]])
+  valid_x_key <- !is.na(x_merge_key) & nzchar(x_merge_key)
+  valid_y_key <- !is.na(y_merge_key) & nzchar(y_merge_key)
+  if (anyDuplicated(x_merge_key[valid_x_key])) {
+    stop(
+      "x_merge_col ('", x_merge_col,
+      "') contains duplicated non-missing identifiers.",
+      call. = FALSE
+    )
+  }
+  if (anyDuplicated(y_merge_key[valid_y_key])) {
+    stop(
+      "y_merge_col ('", y_merge_col,
+      "') contains duplicated non-missing identifiers.",
+      call. = FALSE
     )
   }
 
-  # 分类函数(仅考虑FC)
-  classify_fc_only <- function(lfc1, lfc2) {
-    case_when(
-      lfc1 > log2_fc & lfc2 > log2_fc ~ "upup",
-      lfc1 < -log2_fc & lfc2 < -log2_fc ~ "dwdw",
-      lfc1 > log2_fc & lfc2 < -log2_fc ~ "updw",
-      lfc1 < -log2_fc & lfc2 > log2_fc ~ "dwup",
-      TRUE ~ "other"
-    )
+  gene_type <- NULL
+  if ("Gene_Type" %in% colnames(x_deg_result)) {
+    gene_type <- x_deg_result[["Gene_Type"]]
+  } else if (pc) {
+    gene_annotation <- .abel_gene_annotation(species)
+    if (!"Gene_Type" %in% colnames(gene_annotation)) {
+      stop(
+        "The bundled ", species,
+        " gene annotation does not contain a Gene_Type column.",
+        call. = FALSE
+      )
+    }
+
+    annotation_ids <- rownames(gene_annotation)
+    normalized_x_ids <- sub("\\..*$", "", x_merge_key)
+    gene_type <- gene_annotation[["Gene_Type"]][
+      match(normalized_x_ids, annotation_ids)
+    ]
+
+    if ("Symbol" %in% colnames(gene_annotation)) {
+      annotation_symbols <- as.character(gene_annotation[["Symbol"]])
+      unique_symbol <- !is.na(annotation_symbols) &
+        nzchar(annotation_symbols) &
+        !duplicated(annotation_symbols) &
+        !duplicated(annotation_symbols, fromLast = TRUE)
+      symbol_match <- match(
+        as.character(x_deg_result[["Symbol"]]),
+        annotation_symbols[unique_symbol]
+      )
+      missing_gene_type <- is.na(gene_type)
+      gene_type[missing_gene_type] <- gene_annotation[["Gene_Type"]][
+        which(unique_symbol)[symbol_match[missing_gene_type]]
+      ]
+    }
+
+    if (all(is.na(gene_type))) {
+      stop(
+        "Gene_Type could not be annotated for x_deg_result using the bundled ",
+        species, " gene annotation. Check species, x_merge_col, and Symbol.",
+        call. = FALSE
+      )
+    }
   }
 
-  # 添加分组
-  vs.degs <- vs.degs |>
-    mutate(
-      Group = classify_with_pval(LFC_1, LFC_2, PV_1, PV_2),
-      Group2 = classify_fc_only(LFC_1, LFC_2)
-    )
+  x_degs <- data.frame(
+    Merge_ID = x_merge_key,
+    Symbol = x_deg_result[["Symbol"]],
+    X_value = x_deg_result[[x_col]],
+    X_pvalue = x_deg_result[[x_pvalue_col]],
+    stringsAsFactors = FALSE,
+    check.names = FALSE
+  )
+  if (!is.null(gene_type)) {
+    x_degs$Gene_Type <- gene_type
+  }
+  y_degs <- data.frame(
+    Merge_ID = y_merge_key,
+    Y_value = y_deg_result[[y_col]],
+    Y_pvalue = y_deg_result[[y_pvalue_col]],
+    stringsAsFactors = FALSE,
+    check.names = FALSE
+  )
+  x_degs <- x_degs[valid_x_key, , drop = FALSE]
+  y_degs <- y_degs[valid_y_key, , drop = FALSE]
 
-  # 筛选protein_coding基因
+  vs.degs <- inner_join(x_degs, y_degs, by = "Merge_ID")
   if (pc) {
     vs.degs <- vs.degs |> filter(Gene_Type == "protein_coding")
   }
-
-  # 获取显著差异基因列表
-  deg.list_1 <- vs.degs |>
-    filter(abs(LFC_1) > log2_fc, PV_1 < pv) |>
-    pull(Symbol)
-
-  deg.list_2 <- vs.degs |>
-    filter(abs(LFC_2) > log2_fc, PV_2 < pv) |>
-    pull(Symbol)
-
-  deg.list <- unique(c(deg.list_1, deg.list_2))
-
-  # 获取背景基因并随机抽样
-  other.list <- vs.degs |>
+  vs.degs <- vs.degs |>
     filter(
-      !Symbol %in% deg.list,
-      !is.na(LFC_1),
-      !is.na(PV_1),
-      !is.na(LFC_2),
-      !is.na(PV_2)
-    ) |>
+      is.finite(X_value),
+      is.finite(Y_value),
+      is.finite(X_pvalue),
+      is.finite(Y_pvalue),
+      !is.na(Symbol),
+      nzchar(Symbol)
+    )
+  if (nrow(vs.degs) < 3L) {
+    stop(
+      "At least three complete matched genes are required for comparison.",
+      call. = FALSE
+    )
+  }
+  if (stats::sd(vs.degs$X_value) == 0 || stats::sd(vs.degs$Y_value) == 0) {
+    stop("The selected axis columns must contain variation.", call. = FALSE)
+  }
+
+  goi_found <- intersect(goi, unique(vs.degs$Symbol))
+  goi_missing <- setdiff(goi, goi_found)
+  if (length(goi_missing) > 0L) {
+    warning(
+      "The following goi gene symbols were not found in the matched, filtered ",
+      "plotting data and cannot be labelled: ",
+      paste(goi_missing, collapse = ", "),
+      call. = FALSE
+    )
+  }
+
+  classify_with_pval <- function(x, y, x_pvalue, y_pvalue) {
+    case_when(
+      x > x_threshold & y > y_threshold &
+        x_pvalue < pvalue_cutoff & y_pvalue < pvalue_cutoff ~ "upup",
+      x < -x_threshold & y < -y_threshold &
+        x_pvalue < pvalue_cutoff & y_pvalue < pvalue_cutoff ~ "dwdw",
+      x > x_threshold & y < -y_threshold &
+        x_pvalue < pvalue_cutoff & y_pvalue < pvalue_cutoff ~ "updw",
+      x < -x_threshold & y > y_threshold &
+        x_pvalue < pvalue_cutoff & y_pvalue < pvalue_cutoff ~ "dwup",
+      TRUE ~ "other"
+    )
+  }
+
+  classify_values_only <- function(x, y) {
+    case_when(
+      x > x_threshold & y > y_threshold ~ "upup",
+      x < -x_threshold & y < -y_threshold ~ "dwdw",
+      x > x_threshold & y < -y_threshold ~ "updw",
+      x < -x_threshold & y > y_threshold ~ "dwup",
+      TRUE ~ "other"
+    )
+  }
+
+  vs.degs <- vs.degs |>
+    mutate(
+      Group = classify_with_pval(X_value, Y_value, X_pvalue, Y_pvalue),
+      Group2 = classify_values_only(X_value, Y_value)
+    )
+
+  x_deg_list <- vs.degs |>
+    filter(abs(X_value) > x_threshold, X_pvalue < pvalue_cutoff) |>
+    pull(Symbol)
+
+  y_deg_list <- vs.degs |>
+    filter(abs(Y_value) > y_threshold, Y_pvalue < pvalue_cutoff) |>
+    pull(Symbol)
+
+  deg.list <- unique(c(x_deg_list, y_deg_list))
+  other.list <- vs.degs |>
+    filter(!Symbol %in% deg.list) |>
     pull(Symbol)
 
   set.seed(seed)
   random.list <- sample(other.list, min(bg_num, length(other.list)))
-  gene.list <- c(deg.list, random.list)
-  gene.list <- unique(c(gene.list, goi))
-
-  # 筛选用于绘图的基因
+  gene.list <- unique(c(goi_found, deg.list, random.list))
   vs.degs <- vs.degs |> filter(Symbol %in% gene.list)
+  if (nrow(vs.degs) < 3L ||
+    stats::sd(vs.degs$X_value) == 0 ||
+    stats::sd(vs.degs$Y_value) == 0) {
+    stop(
+      "At least three plotted genes with variation on both axes are required; ",
+      "increase bg_num or revise the filters.",
+      call. = FALSE
+    )
+  }
+  goi_final <- goi_found
 
-  # 选择要标注的基因
-  goi_final <- goi
-
-  # 自动添加top基因(upup组)
-  top_upup <- vs.degs |>
-    filter(Group == "upup") |>
-    top_n(n = top, wt = LFC_1 * LFC_2) |>
-    pull(Symbol)
-
-  # 自动添加top基因(dwdw组)
-  top_dwdw <- vs.degs |>
-    filter(Group == "dwdw") |>
-    top_n(n = top, wt = LFC_1 * LFC_2) |>
-    pull(Symbol)
+  top_upup <- character()
+  top_dwdw <- character()
+  if (!is.null(top) && top > 0) {
+    top_upup <- vs.degs |>
+      filter(Group == "upup") |>
+      slice_max(order_by = X_value * Y_value, n = top, with_ties = FALSE) |>
+      pull(Symbol)
+    top_dwdw <- vs.degs |>
+      filter(Group == "dwdw") |>
+      slice_max(order_by = X_value * Y_value, n = top, with_ties = FALSE) |>
+      pull(Symbol)
+  }
 
   goi_final <- unique(c(goi_final, top_upup, top_dwdw))
-
-  # 添加GOI标记列
   vs.degs <- vs.degs |>
     mutate(GOI = if_else(Symbol %in% goi_final, Symbol, ""))
 
-  # 相关性检验
-  cor_result <- cor.test(vs.degs$LFC_1, vs.degs$LFC_2)
+  cor_result <- cor.test(vs.degs$X_value, vs.degs$Y_value)
 
   if (show_cor) {
     cat("\nCorrelation test result:\n")
     print(cor_result)
   }
 
-  # 线性回归计算斜率
-  lm_model <- lm(LFC_2 ~ LFC_1, data = vs.degs)
+  lm_model <- lm(Y_value ~ X_value, data = vs.degs)
   slope_k <- lm_model$coefficients[2]
-
-  # 提取相关系数和p值
   cor_r <- cor_result$estimate
   cor_p <- cor_result$p.value
-
-  # 确定显著性星号
   sig_stars <- case_when(
     cor_p < 0.001 ~ "***",
     cor_p < 0.01 ~ "**",
@@ -770,7 +974,6 @@ plot_deg_comparison <- function(
     TRUE ~ "ns"
   )
 
-  # 创建标注文本(使用斜体K和r)
   cor_label <- paste0(
     "italic(K)==",
     round(slope_k, 4),
@@ -781,7 +984,6 @@ plot_deg_comparison <- function(
     "'"
   )
 
-  # 定义颜色
   mycolour <- c(
     "dwdw" = "#3C5488",
     "upup" = "#A81E2C",
@@ -790,33 +992,20 @@ plot_deg_comparison <- function(
     "other" = "grey"
   )
 
-  # 将超出limit的值裁剪到limit范围内
   vs.degs <- vs.degs |>
     mutate(
-      LFC_1 = case_when(
-        LFC_1 > limit ~ limit,
-        LFC_1 < -limit ~ -limit,
-        TRUE ~ LFC_1
-      ),
-      LFC_2 = case_when(
-        LFC_2 > limit ~ limit,
-        LFC_2 < -limit ~ -limit,
-        TRUE ~ LFC_2
-      )
+      Plot_X = pmin(pmax(X_value, x_limits[1]), x_limits[2]),
+      Plot_Y = pmin(pmax(Y_value, y_limits[1]), y_limits[2])
     )
 
-  # 绘图
   p <- vs.degs |>
-    ggplot(aes(LFC_1, LFC_2)) +
-    # 第一层:按Group2着色(仅FC标准)
+    ggplot(aes(Plot_X, Plot_Y)) +
     geom_point_rast(
       aes(color = Group2),
       shape = 16,
       alpha = 0.6,
       show.legend = FALSE
     ) +
-    # 第二层:按Group着色(FC+PV标准)的空心点
-    # geom_point_rast(aes(color = Group), shape = 1, alpha = 0.6, show.legend = FALSE) +
     geom_point_rast(
       data = vs.degs |> filter(Group != "other"),
       aes(color = Group),
@@ -824,21 +1013,18 @@ plot_deg_comparison <- function(
       alpha = 0.6,
       show.legend = FALSE
     ) +
-    # 第三层:标注感兴趣基因的黑色空心圆
     geom_point(
-      color = ifelse(vs.degs$GOI == "", NA, "black"),
+      data = vs.degs |> filter(GOI != ""),
+      color = "black",
       shape = 1,
       show.legend = FALSE
     ) +
-    # 坐标轴范围
-    xlim(-limit, limit) +
-    ylim(-limit, limit) +
-    # 主题和标签
+    coord_cartesian(xlim = x_limits, ylim = y_limits, expand = FALSE) +
     theme_test() +
-    xlab(label_1) +
-    ylab(label_2) +
-    # 基因名标注
+    xlab(x_label) +
+    ylab(y_label) +
     ggrepel::geom_text_repel(
+      data = vs.degs |> filter(GOI != ""),
       aes(label = GOI, color = Group2),
       show.legend = FALSE,
       fontface = "bold",
@@ -848,23 +1034,19 @@ plot_deg_comparison <- function(
       segment.size = 0.3,
       max.overlaps = 10000
     ) +
-    # 阈值线
-    geom_hline(yintercept = c(-log2_fc, log2_fc), linetype = "dotted") +
-    geom_vline(xintercept = c(-log2_fc, log2_fc), linetype = "dotted") +
-    # 相关性标注(左上角)
+    geom_hline(yintercept = c(-y_threshold, y_threshold), linetype = "dotted") +
+    geom_vline(xintercept = c(-x_threshold, x_threshold), linetype = "dotted") +
     annotate(
       "text",
-      x = -limit * 0.6,
-      y = limit * 0.9,
+      x = x_limits[1] + diff(x_limits) * 0.2,
+      y = y_limits[2] - diff(y_limits) * 0.1,
       label = cor_label,
       size = 4,
       hjust = 0.5,
       parse = TRUE
     ) +
-    # 颜色设置
     scale_color_manual(values = mycolour)
 
-  # 添加标题(如果提供)
   if (!is.null(plot_title)) {
     p <- p +
       ggtitle(plot_title) +
@@ -872,6 +1054,37 @@ plot_deg_comparison <- function(
   }
 
   return(p)
+}
+
+
+.validate_deg_axis_threshold <- function(value, fallback, argument) {
+  if (is.null(value)) {
+    return(fallback)
+  }
+  if (!is.numeric(value) || length(value) != 1L ||
+    !is.finite(value) || value < 0) {
+    stop(argument, " must be one finite non-negative number.", call. = FALSE)
+  }
+  unname(value)
+}
+
+
+.validate_deg_axis_limits <- function(value, limit, argument) {
+  if (is.null(value)) {
+    if (!is.numeric(limit) || length(limit) != 1L ||
+      !is.finite(limit) || limit <= 0) {
+      stop("limit must be one finite positive number.", call. = FALSE)
+    }
+    return(c(-limit, limit))
+  }
+  if (!is.numeric(value) || length(value) != 2L ||
+    any(!is.finite(value))) {
+    stop(argument, " must contain two finite numeric values.", call. = FALSE)
+  }
+  if (value[1] >= value[2]) {
+    stop(argument, " must be ordered from lower to upper.", call. = FALSE)
+  }
+  unname(value)
 }
 
 
