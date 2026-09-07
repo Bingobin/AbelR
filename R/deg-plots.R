@@ -279,6 +279,11 @@ target_for_volcano <- function(
 #' the most significant genes in each direction. The plot is still returned
 #' when either or both DEG directions are empty; counts are reported in a
 #' message and in the plot subtitle.
+#' For plotting, zero P values are replaced by the smallest finite positive
+#' value in the selected P-value column of the full input table, before applying
+#' `max_y`. Significance classification and top-gene ranking use original values.
+#' If no positive value exists, a warning is issued and zeros use the existing
+#' `max_y` cap.
 #'
 #' @param deseq2_result.df A data frame containing at least `Symbol`,
 #'   `log2FoldChange`, `pvalue`, and `padj` columns. A `Gene_Type` column is
@@ -368,6 +373,12 @@ volcano_plot_Deseq2 <- function(
   } else {
     gg$padj <- deseq2_result.df$pvalue
   }
+  positive_pvalues <- gg$padj[is.finite(gg$padj) & gg$padj > 0]
+  zero_pvalue_replacement <- if (length(positive_pvalues)) {
+    min(positive_pvalues)
+  } else {
+    NA_real_
+  }
   gg <- gg[match(target_gene.list, gg$Symbol), ]
   gg <- gg |> filter(!is.na(log2FoldChange), !is.na(padj))
   if (nrow(gg) == 0) {
@@ -442,6 +453,18 @@ volcano_plot_Deseq2 <- function(
   }
   if (min(gg$log2FoldChange) < -max_x) {
     gg[gg$log2FoldChange < -max_x, ]$log2FoldChange <- -max_x
+  }
+  if (any(gg$padj == 0)) {
+    if (is.na(zero_pvalue_replacement)) {
+      warning(
+        "No finite positive P value was found in the full input ",
+        if (adjust) "padj" else "pvalue",
+        " column; zero P values will use the max_y cap.",
+        call. = FALSE
+      )
+    } else {
+      gg$padj[gg$padj == 0] <- zero_pvalue_replacement
+    }
   }
   if (min(gg$padj) < 10^-max_y) {
     gg[gg$padj < 10^-max_y, ]$padj <- 10^-max_y

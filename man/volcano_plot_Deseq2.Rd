@@ -61,6 +61,11 @@ upregulated and downregulated genes, and labels selected genes together with
 the most significant genes in each direction. The plot is still returned
 when either or both DEG directions are empty; counts are reported in a
 message and in the plot subtitle.
+For plotting, zero P values are replaced by the smallest finite positive
+value in the selected P-value column of the full input table, before applying
+\code{max_y}. Significance classification and top-gene ranking use original values.
+If no positive value exists, a warning is issued and zeros use the existing
+\code{max_y} cap.
 }
 \seealso{
 \code{\link[=target_for_volcano]{target_for_volcano()}}

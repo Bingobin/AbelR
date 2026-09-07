@@ -55,6 +55,49 @@ test_that("DESeq2 volcano prioritizes P value before fold change", {
 })
 
 
+test_that("DESeq2 volcano replaces zeros using the full selected P-value column", {
+  skip_if_not_installed("ggrepel")
+  result <- data.frame(
+    Symbol = c("ZERO", "NONZERO", "UNPLOTTED_MIN", "MISSING"),
+    log2FoldChange = c(2, -2, 0, 0),
+    pvalue = c(0, 1e-5, 1e-15, NA),
+    padj = c(0, 1e-3, 1e-10, NA)
+  )
+  original <- result
+  for (adjust in c(TRUE, FALSE)) {
+    plot <- volcano_plot_Deseq2(
+      result, gene.list = character(), n = 0, top = 1,
+      adjust = adjust, max_y = 100
+    )
+    expect_false("UNPLOTTED_MIN" %in% plot$data$Symbol)
+    expect_equal(
+      plot$data$padj[plot$data$Symbol == "ZERO"],
+      if (adjust) 1e-10 else 1e-15
+    )
+    expect_equal(plot$data$group[plot$data$Symbol == "ZERO"], "up")
+    expect_equal(plot$data$label[plot$data$Symbol == "ZERO"], "ZERO")
+  }
+  expect_identical(result, original)
+})
+
+
+test_that("DESeq2 volcano warns when all available P values are zero", {
+  skip_if_not_installed("ggrepel")
+  result <- data.frame(
+    Symbol = c("UP", "DOWN"), log2FoldChange = c(2, -2),
+    pvalue = c(0, 0), padj = c(0, 0)
+  )
+  expect_warning(
+    plot <- volcano_plot_Deseq2(
+      result, gene.list = character(), n = 0, top = 0,
+      adjust = TRUE, max_y = 20
+    ),
+    "No finite positive P value.*padj.*max_y"
+  )
+  expect_equal(-log10(plot$data$padj), c(20, 20))
+})
+
+
 test_that("DESeq2 volcano accepts custom up and down colors", {
   skip_if_not_installed("ggrepel")
 
