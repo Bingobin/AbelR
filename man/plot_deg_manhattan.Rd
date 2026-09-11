@@ -20,7 +20,8 @@ plot_deg_manhattan(
   top_n = 10,
   cap_value = 20,
   chr_keep = NULL,
-  facet_nrow = 1
+  facet_nrow = 1,
+  label_genes = NULL
 )
 }
 \arguments{
@@ -55,9 +56,13 @@ direction.}
 \item{chr_keep}{Optional chromosomes and order to retain.}
 
 \item{facet_nrow}{Number of rows in the treatment facet layout.}
+
+\item{label_genes}{Optional character vector of gene symbols to label in
+addition to top genes, regardless of significance. Genes must be present
+in the filtered plotting data. Use \code{top_n = 0} to label only these genes.}
 }
 \value{
-A list with the joined data (\code{deg_merge}), labelled genes
+A list with the joined data (\code{deg_merge}), automatically selected top genes
 (\code{top_genes}), and the \link[ggplot2:ggplot]{ggplot2::ggplot} object (\code{plot}).
 }
 \description{

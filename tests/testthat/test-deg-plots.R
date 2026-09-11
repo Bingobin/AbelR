@@ -381,4 +381,23 @@ test_that("DEG Manhattan labels top up and down genes separately", {
     result$top_genes$Symbol,
     c("UP2", "UP3", "DOWN2", "DOWN3")
   )
+
+  for (top_n in c(2, 0)) {
+    labelled <- plot_deg_manhattan(
+      deg_list = list(Treatment = deg),
+      color_map = c(Treatment = "#333333"),
+      species = "human",
+      gene_anno_file = annotation_file,
+      chromosome_lengths = c(chr1 = 1000),
+      chr_keep = "chr1",
+      top_n = top_n,
+      label_genes = c("NS", "UP3", "UP3")
+    )
+    expected_top <- if (top_n == 2) result$top_genes$Symbol else character()
+    expect_setequal(labelled$top_genes$Symbol, expected_top)
+    expect_setequal(
+      labelled$deg_merge$Symbol[labelled$deg_merge$label != ""],
+      unique(c(expected_top, "NS", "UP3"))
+    )
+  }
 })

@@ -1137,8 +1137,11 @@ plot_deg_comparison <- function(
 #' @param cap_value Maximum absolute signed significance score displayed.
 #' @param chr_keep Optional chromosomes and order to retain.
 #' @param facet_nrow Number of rows in the treatment facet layout.
+#' @param label_genes Optional character vector of gene symbols to label in
+#'   addition to top genes, regardless of significance. Genes must be present
+#'   in the filtered plotting data. Use `top_n = 0` to label only these genes.
 #'
-#' @return A list with the joined data (`deg_merge`), labelled genes
+#' @return A list with the joined data (`deg_merge`), automatically selected top genes
 #'   (`top_genes`), and the [ggplot2::ggplot] object (`plot`).
 #' @export
 plot_deg_manhattan <- function(
@@ -1157,7 +1160,8 @@ plot_deg_manhattan <- function(
   top_n = 10,
   cap_value = 20,
   chr_keep = NULL,
-  facet_nrow = 1
+  facet_nrow = 1,
+  label_genes = NULL
 ) {
   species <- match.arg(species)
 
@@ -1313,7 +1317,8 @@ plot_deg_manhattan <- function(
   deg_merge <- deg_merge %>%
     mutate(
       label = if_else(
-        paste(Symbol, Treatment, sep = "\r") %in% top_keys,
+        paste(Symbol, Treatment, sep = "\r") %in% top_keys |
+          Symbol %in% label_genes,
         Symbol,
         ""
       ),
