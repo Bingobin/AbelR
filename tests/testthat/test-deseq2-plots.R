@@ -31,6 +31,32 @@ test_that("gene TPM plot uses build_bulkRNA_batches-style input", {
     sort(plot$data$Median),
     sort(log2(c(0, 3, 7, 15) + 1))
   )
+
+  expect_error(
+    plot_gene_tpm_median(bulk, "GENE1", pair_col = "Pair"),
+    "Missing design columns: Pair"
+  )
+  bulk$design$Pair <- "1"
+  unpaired <- plot_gene_tpm_median(bulk, "GENE1")
+  expect_equal(length(unpaired$layers), 3L)
+  paired <- plot_gene_tpm_median(bulk, "GENE1", pair_col = "Pair")
+  built <- ggplot2::ggplot_build(paired)
+  lines <- built$data[[3]]
+  points <- built$data[[4]]
+  expect_equal(length(unique(lines$group)), 2L)
+  expect_equal(as.integer(table(lines$group)), c(2L, 2L))
+  expect_equal(lines[, c("x", "y", "PANEL")], points[, c("x", "y", "PANEL")])
+
+  bulk$design$Pair[1] <- NA
+  partial <- plot_gene_tpm_median(bulk, "GENE1", pair_col = "Pair")
+  expect_equal(nrow(partial$layers[[3]]$data), 2L)
+  expect_equal(nrow(partial$layers[[4]]$data), 4L)
+  names(bulk$design)[names(bulk$design) == "Pair"] <- "DishID"
+  custom <- plot_gene_tpm_median(bulk, "GENE1", pair_col = "DishID")
+  expect_equal(
+    ggplot2::ggplot_build(custom)$data[[3]],
+    ggplot2::ggplot_build(partial)$data[[3]]
+  )
 })
 
 

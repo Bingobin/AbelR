@@ -17,7 +17,8 @@ DESeq2_DEG_analysis_batch(
   tr_name = NULL,
   ctr_name = NULL,
   species = c("human", "mouse"),
-  gene_anno_file = NULL
+  gene_anno_file = NULL,
+  pair_col = NULL
 )
 }
 \arguments{
@@ -43,6 +44,13 @@ groups.}
 
 \item{gene_anno_file}{Optional annotation table (\code{.txt} or \code{.txt.gz}). When
 \code{NULL}, AbelR uses its bundled species-specific annotation.}
+
+\item{pair_col}{Optional column in \code{design.df} identifying matched biological
+pairs. With \code{NULL}, the model is \code{~ ContrastGroup}. Otherwise it is
+\code{~ PairID + ContrastGroup}, with control as the reference group. After
+sample selection, at least two complete pairs are required, each with
+exactly one treatment and one control sample. Pair IDs must be non-missing
+and unique across independent pairs, including across batches.}
 }
 \value{
 A list containing DESeq2 coefficient names (\code{inter}), the annotated

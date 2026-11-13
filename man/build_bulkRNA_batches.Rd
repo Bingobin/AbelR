@@ -30,7 +30,7 @@ standardized names. Unmapped prefixes are retained unchanged.}
 }
 \value{
 A list containing the merged \code{count} and \code{tpm} data frames and a
-\code{design} data frame with \code{CellLine}, \code{Library}, \code{Batch}, and \code{Group}.
+\code{design} data frame with \code{CellLine}, \code{Library}, \code{Batch}, \code{Group}, and \code{Pair}.
 }
 \description{
 Reads one count table and one TPM table for each batch, appends the batch ID
@@ -38,5 +38,9 @@ to every sample name, joins the tables by gene ID, and constructs sample
 metadata. Input sample columns are expected to follow
 \verb{<CellLine>_<TargetGene>_<Group>_<replicate>}, for example
 \code{M13_KAP1_sh9_1}. \code{Group} is taken from the segment immediately before the
-numeric replicate, producing \code{SH9} in this example.
+numeric replicate, producing \code{SH9} in this example. \code{Pair} is the final
+replicate segment, stored as a character value (\code{"1"} in this example).
+Pair labels are not prefixed with batch or cell-line identifiers; when
+pooling independent batches or cell lines, construct unique pair IDs before
+paired analysis. Replicate labels should reflect the actual paired design.
 }

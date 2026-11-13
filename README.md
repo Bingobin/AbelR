@@ -73,7 +73,7 @@ Source: `R/deseq2.R`
 
 | Function | Description |
 |---|---|
-| `build_bulkRNA_batches()` | Merge batch-specific count and TPM tables and construct `CellLine/Library/Batch/Group` sample metadata. |
+| `build_bulkRNA_batches()` | Merge batch-specific count and TPM tables and construct `CellLine/Library/Batch/Group/Pair` sample metadata. `Pair` defaults to the final replicate segment of the input sample name. |
 | `plot_bulkRNA_PCA()` | Calculate VST-based sample PCA from `build_bulkRNA_batches()` output and draw a batch-aware static or interactive plot. |
 | `plot_gene_tpm_median()` | Plot one gene's median log2(TPM + 1), interquartile range, and sample values across cell lines, batches, groups, and libraries. |
 | `DESeq2_DEG_analysis()` | Run a two-group human or mouse DESeq2 analysis using the shared species-aware implementation. |
@@ -326,3 +326,31 @@ Alternatively, `tr_filter` and `ctr_filter` can be named lists containing any
 columns in `design.df`, while the required standard columns remain present. The
 annotation table must use gene IDs in its first column; a `Symbol` column is
 recommended so that AbelR can add Entrez IDs using the selected species.
+
+For paired samples, add a metadata column identifying the shared biological
+source and pass its name as `pair_col`. Pairing must come from the experimental
+design, not inferred from sample-name suffixes:
+
+```r
+paired_design <- data.frame(
+  Group = c("SH2", "SCR", "SH2", "SCR"),
+  Batch = "Batch1",
+  Library = "RNA-seq",
+  Pair = c("Dish1", "Dish1", "Dish2", "Dish2"),
+  row.names = c("SH2_1", "SCR_1", "SH2_2", "SCR_2")
+)
+paired_deg <- DESeq2_DEG_analysis_batch(
+  count.matrix = counts,
+  design.df = paired_design,
+  library = "RNA-seq", batch = "Batch1",
+  tr = "SH2", ctr = "SCR",
+  pair_col = "Pair"
+)
+```
+
+This fits `~ PairID + ContrastGroup`, estimating treatment versus control while
+accounting for pair differences. The default `pair_col = NULL` retains the
+unpaired model. The selected samples must contain at least two complete pairs,
+with one treatment and one control per pair; invalid pairs cause an error rather
+than being silently dropped. Use globally distinct pair IDs across batches.
+`Batch` and `Library` remain selection filters, not additional model terms.

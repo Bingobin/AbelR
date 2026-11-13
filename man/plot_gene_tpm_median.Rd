@@ -8,7 +8,8 @@ plot_gene_tpm_median(
   bulk_data,
   gene,
   id_col = "GID",
-  group_colors = get("mycol", envir = asNamespace("AbelR"))
+  group_colors = get("mycol", envir = asNamespace("AbelR")),
+  pair_col = NULL
 )
 }
 \arguments{
@@ -23,6 +24,12 @@ ignored during matching.}
 \item{group_colors}{Character vector of valid R colors. Named colors are
 matched to \code{Group} levels when all levels are present; otherwise colors
 are recycled in group-level order.}
+
+\item{pair_col}{Optional pairing column in \code{bulk_data$design}. Defaults to
+\code{NULL} (no connections). When supplied, samples sharing this column's value
+are connected within each cell line, batch, and library. Points are not
+jittered so lines meet them.
+Missing pair IDs and pairs present in only one group are not connected.}
 }
 \value{
 A \link[ggplot2:ggplot]{ggplot2::ggplot} object.

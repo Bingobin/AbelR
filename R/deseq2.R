@@ -7,7 +7,11 @@
 #' metadata. Input sample columns are expected to follow
 #' `<CellLine>_<TargetGene>_<Group>_<replicate>`, for example
 #' `M13_KAP1_sh9_1`. `Group` is taken from the segment immediately before the
-#' numeric replicate, producing `SH9` in this example.
+#' numeric replicate, producing `SH9` in this example. `Pair` is the final
+#' replicate segment, stored as a character value (`"1"` in this example).
+#' Pair labels are not prefixed with batch or cell-line identifiers; when
+#' pooling independent batches or cell lines, construct unique pair IDs before
+#' paired analysis. Replicate labels should reflect the actual paired design.
 #'
 #' @param batches Character or numeric vector of batch identifiers.
 #' @param target Target string used to locate input files.
@@ -19,7 +23,7 @@
 #' @param id_col Gene-identifier column shared by count and TPM tables.
 #'
 #' @return A list containing the merged `count` and `tpm` data frames and a
-#'   `design` data frame with `CellLine`, `Library`, `Batch`, and `Group`.
+#'   `design` data frame with `CellLine`, `Library`, `Batch`, `Group`, and `Pair`.
 #' @export
 build_bulkRNA_batches <- function(
   batches,
@@ -143,6 +147,7 @@ build_bulkRNA_batches <- function(
       Library = rep(as.character(library_name), length(sample_cols)),
       Batch = rep(batch, length(sample_cols)),
       Group = toupper(group),
+      Pair = sub("^.*_", "", sample_cols),
       row.names = new_sample_cols,
       stringsAsFactors = FALSE
     )
@@ -488,6 +493,11 @@ plot_bulkRNA_PCA <- function(
 #' @param group_colors Character vector of valid R colors. Named colors are
 #'   matched to `Group` levels when all levels are present; otherwise colors
 #'   are recycled in group-level order.
+#' @param pair_col Optional pairing column in `bulk_data$design`. Defaults to
+#'   `NULL` (no connections). When supplied, samples sharing this column's value
+#'   are connected within each cell line, batch, and library. Points are not
+#'   jittered so lines meet them.
+#'   Missing pair IDs and pairs present in only one group are not connected.
 #'
 #' @return A [ggplot2::ggplot] object.
 #' @export
@@ -495,8 +505,14 @@ plot_gene_tpm_median <- function(
   bulk_data,
   gene,
   id_col = "GID",
-  group_colors = get("mycol", envir = asNamespace("AbelR"))
+  group_colors = get("mycol", envir = asNamespace("AbelR")),
+  pair_col = NULL
 ) {
+  if (!is.null(pair_col) &&
+      (!is.character(pair_col) || length(pair_col) != 1L ||
+       is.na(pair_col) || !nzchar(pair_col))) {
+    stop("pair_col must be NULL or one non-empty column name.")
+  }
   if (
     !is.list(bulk_data) ||
       !all(c("tpm", "design") %in% names(bulk_data))
@@ -516,6 +532,7 @@ plot_gene_tpm_median <- function(
     stop("bulk_data$tpm and bulk_data$design must be data frames.")
   }
   required_design_cols <- c("CellLine", "Batch", "Group", "Library")
+  if (!is.null(pair_col)) required_design_cols <- c(required_design_cols, pair_col)
   missing_design_cols <- setdiff(required_design_cols, colnames(design))
   if (length(missing_design_cols)) {
     stop(
@@ -673,6 +690,18 @@ plot_gene_tpm_median <- function(
       .groups = "drop"
     )
 
+  pair_df <- NULL
+  if (!is.null(pair_col)) {
+    pair_df <- plot_df |>
+      dplyr::filter(!is.na(.data[[pair_col]]), nzchar(trimws(as.character(.data[[pair_col]])))) |>
+      dplyr::group_by(dplyr::across(dplyr::all_of(c("CellLine", "Batch", "Library", pair_col)))) |>
+      dplyr::filter(dplyr::n_distinct(.data[["Group"]]) > 1L) |>
+      dplyr::ungroup()
+    if (anyDuplicated(pair_df[, unique(c("CellLine", "Batch", "Library", pair_col, "Group"))])) {
+      stop("Each pair must have at most one sample per Group within a cell line, batch, and library.")
+    }
+  }
+
   dodge <- ggplot2::position_dodge(width = 0.8)
   ggplot2::ggplot(
     summary_df,
@@ -699,6 +728,15 @@ plot_gene_tpm_median <- function(
       width = 0.3,
       linewidth = 1
     ) +
+    (if (!is.null(pair_col)) ggplot2::geom_line(
+      data = pair_df,
+      ggplot2::aes(
+        x = .data[["Group"]], y = .data[["log2_TPM_plus_1"]],
+        group = interaction(.data[["CellLine"]], .data[["Batch"]],
+                            .data[["Library"]], .data[[pair_col]], drop = TRUE)
+      ),
+      inherit.aes = FALSE, color = "grey50", linewidth = 0.5, alpha = 0.7
+    )) +
     ggplot2::geom_point(
       data = plot_df,
       ggplot2::aes(
@@ -706,7 +744,7 @@ plot_gene_tpm_median <- function(
         y = .data[["log2_TPM_plus_1"]],
         group = .data[["Batch"]]
       ),
-      position = ggplot2::position_jitter(
+      position = if (!is.null(pair_col)) ggplot2::position_identity() else ggplot2::position_jitter(
         width = 0.08,
         height = 0
       ),
@@ -760,6 +798,12 @@ plot_gene_tpm_median <- function(
 #'   `"mouse"`.
 #' @param gene_anno_file Optional annotation table (`.txt` or `.txt.gz`). When
 #'   `NULL`, AbelR uses its bundled species-specific annotation.
+#' @param pair_col Optional column in `design.df` identifying matched biological
+#'   pairs. With `NULL`, the model is `~ ContrastGroup`. Otherwise it is
+#'   `~ PairID + ContrastGroup`, with control as the reference group. After
+#'   sample selection, at least two complete pairs are required, each with
+#'   exactly one treatment and one control sample. Pair IDs must be non-missing
+#'   and unique across independent pairs, including across batches.
 #'
 #' @return A list containing DESeq2 coefficient names (`inter`), the annotated
 #'   result table (`result`), the variance-stabilized object (`vsd`), selected
@@ -778,11 +822,18 @@ DESeq2_DEG_analysis_batch <- function(
   tr_name = NULL,
   ctr_name = NULL,
   species = c("human", "mouse"),
-  gene_anno_file = NULL
+  gene_anno_file = NULL,
+  pair_col = NULL
 ) {
   species <- .abel_normalize_species(species)
   organism <- if (species == "human") "hsa" else "mmu"
   stopifnot(all(c("Group", "Batch", "Library") %in% colnames(design.df)))
+  if (!is.null(pair_col) &&
+      (!is.character(pair_col) || length(pair_col) != 1L ||
+       is.na(pair_col) || !nzchar(pair_col) ||
+       !pair_col %in% colnames(design.df))) {
+    stop("pair_col must name an existing column in design.df.")
+  }
   stopifnot("GID" %in% colnames(count.matrix))
   if (!is.null(tpm.matrix)) {
     stopifnot("GID" %in% colnames(tpm.matrix))
@@ -849,12 +900,35 @@ DESeq2_DEG_analysis_batch <- function(
     stop("ctr_filter matched no samples.")
   }
   design <- design.df[tr_idx | ctr_idx, , drop = FALSE]
+  if (!is.null(pair_col)) {
+    pair_ids <- as.character(design[[pair_col]])
+    if (anyNA(pair_ids) || any(!nzchar(trimws(pair_ids)))) {
+      stop("The selected samples have missing or empty pair IDs in ", pair_col, ".")
+    }
+    design$PairID <- factor(pair_ids)
+  }
   design$ContrastGroup <- ifelse(tr_idx[tr_idx | ctr_idx], tr_name, ctr_name)
   design$ContrastGroup <- factor(
     design$ContrastGroup,
     levels = c(ctr_name, tr_name)
   )
   design$SampleID <- rownames(design)
+
+  design_formula <- ~ContrastGroup
+  if (!is.null(pair_col)) {
+    pair_counts <- table(design$PairID, design$ContrastGroup)
+    incomplete_pairs <- rownames(pair_counts)[rowSums(pair_counts != 1L) > 0L]
+    if (length(incomplete_pairs)) {
+      stop(
+        "Each pair must contain exactly one treatment and one control sample. ",
+        "Check pair IDs: ", paste(incomplete_pairs, collapse = ", ")
+      )
+    }
+    if (nrow(pair_counts) < 2L) {
+      stop("Paired analysis requires at least two complete biological pairs.")
+    }
+    design_formula <- ~PairID + ContrastGroup
+  }
 
   counts <- as.matrix(count.matrix[, rownames(design), drop = FALSE])
   rownames(counts) <- count.matrix$GID
@@ -867,7 +941,7 @@ DESeq2_DEG_analysis_batch <- function(
   dds <- DESeqDataSetFromMatrix(
     countData = counts,
     colData = design,
-    design = ~ContrastGroup
+    design = design_formula
   )
   dds <- DESeq(dds)
   res <- results(dds, alpha = 0.05)
