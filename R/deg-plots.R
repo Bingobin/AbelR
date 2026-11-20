@@ -179,7 +179,7 @@ plot_deg_heatmap_for_DEGseq2 <- function(
     name = "Z-score",
     col = circlize::colorRamp2(
       c(-2, 0, 2),
-      c("#63010b", "white", "#023c5c")
+      c("#023c5c", "white", "#63010b")
     ),
     top_annotation = ComplexHeatmap::HeatmapAnnotation(
       Group = col_anno$Group,
