@@ -880,14 +880,17 @@ gsea_plot_custom <- function(
 #'   every nested group, for example `"C2_CP_KEGG_LEGACY"`. Colon-form names
 #'   such as `"C2:CP:KEGG_LEGACY"` are also accepted. When the selected result
 #'   tables contain a `Database` column, rows are restricted to this database.
-#' @param p_column P-value column used for top-pathway selection, dot size, and
-#'   heatmap significance stars. Choose `"p.adjust"` (the default) or
+#' @param p_column P-value column used for mixed display ordering, breaking NES
+#'   ties, dot size, and heatmap significance stars. Choose `"p.adjust"` (the default) or
 #'   `"pvalue"`.
 #' @param pathway_column Pathway column used for selection and plot labels.
 #'   Choose `"ID"` (the default) or `"Description"`.
-#' @param top_n Number of pathways selected independently from each group using
-#'   the smallest values in `p_column`. Supply one number for every group, or a
-#'   named numeric vector to set different values for different groups. Set to
+#' @param top_n Number of pathways selected per direction independently in each
+#'   group: the largest positive NES values and the most negative NES values.
+#'   Zero and non-finite NES values are excluded from automatic selection.
+#'   Selected pathways are then mixed and ordered by increasing `p_column`,
+#'   with decreasing absolute NES breaking P-value ties. Supply one number for
+#'   all groups, or a named numeric vector for group-specific counts. Set to
 #'   `0` or `NULL` to use only `label_pathways`.
 #' @param label_pathways Optional character vector containing values from the
 #'   selected `pathway_column`. These pathways are placed first and displayed
@@ -1175,10 +1178,16 @@ plot_gsea_summary <- function(
   }
 
   top_terms <- unlist(lapply(group_names, function(group_name) {
-    utils::head(
-      ranked_list[[group_name]]$SelectedPathway,
-      top_by_group[[group_name]]
+    result <- ranked_list[[group_name]]
+    positive <- which(is.finite(result$NES) & result$NES > 0)
+    negative <- which(is.finite(result$NES) & result$NES < 0)
+    positive <- positive[order(-result$NES[positive], result[[p_column]][positive])]
+    negative <- negative[order(result$NES[negative], result[[p_column]][negative])]
+    selected <- c(
+      utils::head(positive, top_by_group[[group_name]]),
+      utils::head(negative, top_by_group[[group_name]])
     )
+    result$SelectedPathway[sort(selected)]
   }), use.names = FALSE)
   available_terms <- unique(unlist(lapply(
     ranked_list,
@@ -1329,15 +1338,9 @@ plot_gsea_summary <- function(
       y = pathway_axis_title,
       size = p_legend
     )
-  if (length(group_names) == 1L) {
-    dotplot <- dotplot + ggplot2::theme(
-      axis.text.x = ggplot2::element_blank()
-    )
-  } else {
-    dotplot <- dotplot + ggplot2::theme(
-      axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)
-    )
-  }
+  dotplot <- dotplot + ggplot2::theme(
+    axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, vjust = 1)
+  )
 
   heatmap <- ggplot2::ggplot(
     gsea.plot,

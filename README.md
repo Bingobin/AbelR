@@ -186,6 +186,7 @@ Source: `R/scrna.R`
 | Function | Description |
 |---|---|
 | `filter_seurat_qc()` | Filter a Seurat object using configurable feature, count, mitochondrial-content, and doublet thresholds. |
+| `plot_seurat_umap()` | Plot an existing Seurat UMAP with rasterized points and group labels at median coordinates. |
 | `scRNA_SCT_norm()` | Run a Seurat v5 SCT and RPCA integration workflow after splitting RNA layers by a configurable sample column. |
 | `run_cytotrace2_by_sample()` | Run CytoTRACE2 independently for each sample and combine the resulting cell-level metadata. |
 | `run_monocle3_from_seurat_umap()` | Build a Monocle3 cell-data set using Seurat metadata and UMAP coordinates, learn a trajectory, and optionally order cells from selected root clusters. |

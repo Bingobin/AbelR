@@ -35,16 +35,19 @@ every nested group, for example \code{"C2_CP_KEGG_LEGACY"}. Colon-form names
 such as \code{"C2:CP:KEGG_LEGACY"} are also accepted. When the selected result
 tables contain a \code{Database} column, rows are restricted to this database.}
 
-\item{p_column}{P-value column used for top-pathway selection, dot size, and
-heatmap significance stars. Choose \code{"p.adjust"} (the default) or
+\item{p_column}{P-value column used for mixed display ordering, breaking NES
+ties, dot size, and heatmap significance stars. Choose \code{"p.adjust"} (the default) or
 \code{"pvalue"}.}
 
 \item{pathway_column}{Pathway column used for selection and plot labels.
 Choose \code{"ID"} (the default) or \code{"Description"}.}
 
-\item{top_n}{Number of pathways selected independently from each group using
-the smallest values in \code{p_column}. Supply one number for every group, or a
-named numeric vector to set different values for different groups. Set to
+\item{top_n}{Number of pathways selected per direction independently in each
+group: the largest positive NES values and the most negative NES values.
+Zero and non-finite NES values are excluded from automatic selection.
+Selected pathways are then mixed and ordered by increasing \code{p_column},
+with decreasing absolute NES breaking P-value ties. Supply one number for
+all groups, or a named numeric vector for group-specific counts. Set to
 \code{0} or \code{NULL} to use only \code{label_pathways}.}
 
 \item{label_pathways}{Optional character vector containing values from the

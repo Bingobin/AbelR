@@ -1,5 +1,70 @@
 # Functions for scrna analyses.
 
+#' Plot a Seurat UMAP by a metadata column
+#'
+#' Draws cells from an existing UMAP embedding and labels each group at its
+#' coordinate-wise median. Cells with missing group values are drawn in grey.
+#'
+#' @param seu A Seurat object containing a UMAP reduction.
+#' @param reduction Name of the reduction. Its first two dimensions are used.
+#' @param group_by Metadata column used to color and label cells.
+#'
+#' @return A [ggplot2::ggplot] object with rasterized cell points.
+#' @export
+plot_seurat_umap <- function(seu, reduction = "umap", group_by = "seurat_clusters") {
+  if (!inherits(seu, "Seurat")) {
+    stop("seu must be a Seurat object.", call. = FALSE)
+  }
+  if (!is.character(reduction) || length(reduction) != 1L ||
+      !reduction %in% SeuratObject::Reductions(seu)) {
+    stop("reduction must name an existing reduction in seu.", call. = FALSE)
+  }
+  meta <- seu[[]]
+  if (!is.character(group_by) || length(group_by) != 1L ||
+      !group_by %in% colnames(meta)) {
+    stop("group_by must name an existing metadata column in seu.", call. = FALSE)
+  }
+
+  xy <- SeuratObject::Embeddings(seu, reduction = reduction)
+  if (nrow(xy) == 0L || ncol(xy) < 2L) {
+    stop("The reduction must contain cells and at least two dimensions.", call. = FALSE)
+  }
+  points <- data.frame(
+    x = xy[, 1L],
+    y = xy[, 2L],
+    cell_type = factor(meta[rownames(xy), group_by, drop = TRUE]),
+    row.names = rownames(xy)
+  )
+  centers <- points |>
+    dplyr::filter(!is.na(.data$cell_type)) |>
+    dplyr::group_by(.data$cell_type) |>
+    dplyr::summarise(
+      x = stats::median(.data$x), y = stats::median(.data$y), .groups = "drop"
+    )
+  n_groups <- nlevels(points$cell_type)
+  colors <- if (n_groups <= length(mycol)) {
+    mycol[seq_len(n_groups)]
+  } else {
+    grDevices::colorRampPalette(mycol)(n_groups)
+  }
+
+  ggplot2::ggplot(points, ggplot2::aes(.data$x, .data$y)) +
+    ggrastr::geom_point_rast(
+      ggplot2::aes(color = .data$cell_type),
+      size = 0.27, raster.dpi = 360, dev = "ragg"
+    ) +
+    ggplot2::geom_label(
+      data = centers, ggplot2::aes(label = .data$cell_type),
+      color = "black", fill = "white", linewidth = 0, size = 3, alpha = 0.8
+    ) +
+    ggplot2::scale_color_manual(name = group_by, values = colors, na.value = "grey75") +
+    ggplot2::guides(color = ggplot2::guide_legend(override.aes = list(size = 3))) +
+    ggplot2::labs(x = "UMAP 1", y = "UMAP 2") +
+    ggplot2::coord_equal() +
+    ggplot2::theme_classic(base_size = 12)
+}
+
+
 #' Filter a Seurat object using common RNA quality-control metrics
 #'
 #' Retains cells within configurable feature, count, and mitochondrial-content

@@ -156,8 +156,38 @@ test_that("plot_gsea_summary handles a single result", {
   expect_named(summary, c("dotplot", "heatmap", "table"))
   expect_s3_class(summary$dotplot, "ggplot")
   expect_s3_class(summary$heatmap, "ggplot")
-  expect_equal(nrow(summary$table), 2L)
-  expect_setequal(summary$table$Description, c("term2", "term3"))
+  expect_equal(nrow(summary$table), 3L)
+  expect_setequal(summary$table$Description, c("term1", "term2", "term3"))
+  expect_s3_class(summary$dotplot$theme$axis.text.x, "element_text")
+  named <- plot_gsea_summary(list(SH2_vs_SCR = result), top_n = 2)
+  expect_equal(
+    ggplot2::ggplot_build(named$dotplot)$layout$panel_params[[1]]$x$get_labels(),
+    "SH2_vs_SCR"
+  )
+})
+
+test_that("plot_gsea_summary selects NES extremes per direction then mixes by P value", {
+  result <- data.frame(
+    ID = paste0("P", 1:27),
+    Description = paste("Pathway", 1:27),
+    NES = c(as.vector(rbind(1:12, -(1:12))), 0, NA, Inf),
+    pvalue = seq_len(27) / 100,
+    p.adjust = seq_len(27) / 50
+  )
+  summary <- plot_gsea_summary(result, top_n = 10, pathway_column = "Description")
+  expect_equal(nrow(summary$table), 20L)
+  expect_equal(sum(summary$table$NES > 0), 10L)
+  expect_equal(sum(summary$table$NES < 0), 10L)
+  expect_equal(
+    rev(levels(summary$table$Description)),
+    result$Description[5:24]
+  )
+  expect_equal(as.character(summary$table$DisplayTerm), result$Description[5:24])
+
+  # Equal NES values use P values as the tie-breaker in each direction.
+  result$NES[1:4] <- c(2, -2, 2, -2)
+  ties <- plot_gsea_summary(result[4:1, ], top_n = 1)
+  expect_equal(as.character(ties$table$ID), c("P1", "P2"))
 })
 
 test_that("plot_gsea_summary compares groups on a shared pathway axis", {
@@ -345,17 +375,17 @@ test_that("plot_gsea_summary selects P-value and pathway columns", {
     top_n = 1
   )
 
-  expect_equal(as.character(by_adjusted$table$ID), "ID_B")
+  expect_equal(as.character(by_adjusted$table$ID), c("ID_B", "ID_A"))
   expect_equal(
     as.character(by_raw_description$table$Description),
-    "Description A"
+    c("Description A", "Description B")
   )
-  expect_equal(by_raw_description$table$PlotP, 0.001)
+  expect_equal(by_raw_description$table$PlotP, c(0.001, 0.02))
   expect_equal(
     by_raw_description$dotplot$labels$size,
     "-log10(pvalue)"
   )
-  expect_equal(by_raw_description$table$Significance, "**")
+  expect_equal(by_raw_description$table$Significance, c("**", "*"))
 })
 
 test_that("plot_gsea_summary selects one database from nested groups", {
