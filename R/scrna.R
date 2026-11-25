@@ -8,12 +8,192 @@
 #' @param seu A Seurat object containing a UMAP reduction.
 #' @param reduction Name of the reduction. Its first two dimensions are used.
 #' @param group_by Metadata column used to color and label cells.
+#' @param pt.size Non-negative size of the cell points.
+#' @param alpha Cell-point opacity, from `0` (transparent) to `1` (opaque).
+#' @param shuffle Logical; randomize the drawing order of cells to reduce
+#'   systematic overlap from the original cell order.
+#' @param seed Integer seed used when `shuffle = TRUE` to reproduce the drawing
+#'   order without changing the caller's random-number state.
 #'
 #' @return A [ggplot2::ggplot] object with rasterized cell points.
 #' @export
-plot_seurat_umap <- function(seu, reduction = "umap", group_by = "seurat_clusters") {
+plot_seurat_umap <- function(
+  seu,
+  reduction = "umap",
+  group_by = "seurat_clusters",
+  pt.size = 0.27,
+  alpha = 1,
+  shuffle = FALSE,
+  seed = 1L
+) {
+  umap <- .seurat_umap_data(seu, reduction, group_by, pt.size, alpha, shuffle, seed)
+  n_groups <- nlevels(umap$points$cell_type)
+  colors <- if (n_groups <= length(mycol)) {
+    mycol[seq_len(n_groups)]
+  } else {
+    grDevices::colorRampPalette(mycol)(n_groups)
+  }
+
+  ggplot2::ggplot(umap$points, ggplot2::aes(.data$x, .data$y)) +
+    ggrastr::geom_point_rast(
+      ggplot2::aes(color = .data$cell_type),
+      size = pt.size, alpha = alpha, raster.dpi = 360, dev = "ragg"
+    ) +
+    .seurat_umap_labels(umap$centers) +
+    ggplot2::scale_color_manual(name = group_by, values = colors, na.value = "grey75") +
+    ggplot2::guides(color = ggplot2::guide_legend(override.aes = list(size = 3, alpha = 1))) +
+    ggplot2::labs(x = "UMAP 1", y = "UMAP 2") +
+    ggplot2::coord_equal() +
+    ggplot2::theme_classic(base_size = 12)
+}
+
+
+#' Plot a continuous feature on a Seurat UMAP
+#'
+#' Colors cells with finite gene expression or metadata scores strictly above
+#' `min_cutoff`. Missing values, values at or below the cutoff, and cells
+#' outside the highlighted groups are drawn in grey first. Colored cells are
+#' then drawn from the lowest to the highest feature value. The title shows the
+#' number of colored cells out of all selected UMAP cells, or out of the whole
+#' embedding when no groups are highlighted. Group labels use median
+#' coordinates across the full embedding, with a `C` prefix for numeric labels.
+#'
+#' @inheritParams plot_seurat_umap
+#' @param feature One gene name or numeric metadata column. Metadata is used
+#'   when the name matches both sources and `assay` is `NULL`.
+#' @param group_by Metadata column used for group labels.
+#' @param highlight Optional group values to color, such as `"0"`. With `NULL`,
+#'   all UMAP cells are considered for coloring.
+#' @param highlight_by Metadata column used to match `highlight`. Defaults to
+#'   `group_by` and can be set independently of the labels.
+#' @param assay Assay for gene expression. When `NULL`, use the default assay
+#'   for a gene. Set explicitly to read a gene that shares a metadata name.
+#' @param layer Expression layer used for a gene, such as `"data"` or `"counts"`.
+#' @param colors Colors for the continuous gradient, from low to high.
+#' @param min_cutoff Finite lower threshold for coloring cells. Only finite
+#'   feature values strictly greater than the threshold are colored.
+#'
+#' @return A [ggplot2::ggplot] object with rasterized cell points.
+#' @export
+plot_seurat_feature <- function(
+  seu,
+  feature,
+  reduction = "umap",
+  group_by = "seurat_clusters",
+  highlight = NULL,
+  highlight_by = group_by,
+  assay = NULL,
+  layer = "data",
+  colors = c("#4B0C6B", "#AE2191", "#F37B45", "#FCE451"),
+  pt.size = 0.27,
+  alpha = 1,
+  min_cutoff = 0
+) {
+  if (!is.character(feature) || length(feature) != 1L ||
+      is.na(feature) || !nzchar(feature)) {
+    stop("feature must be one gene or metadata column name.", call. = FALSE)
+  }
+  if (!is.numeric(min_cutoff) || length(min_cutoff) != 1L || !is.finite(min_cutoff)) {
+    stop("min_cutoff must be one finite number.", call. = FALSE)
+  }
+  umap <- .seurat_umap_data(seu, reduction, group_by, pt.size, alpha)
+  points <- umap$points
+  cells <- rownames(points)
+  meta <- umap$metadata
+
+  if (!is.null(highlight)) {
+    if (!is.character(highlight_by) || length(highlight_by) != 1L ||
+        !highlight_by %in% names(meta)) {
+      stop("highlight_by must name an existing metadata column in seu.", call. = FALSE)
+    }
+    highlight <- unique(as.character(highlight))
+    groups <- as.character(meta[cells, highlight_by, drop = TRUE])
+    unmatched <- setdiff(highlight, groups[!is.na(groups)])
+    if (length(unmatched) > 0L) {
+      stop("Groups not found in the UMAP for ", highlight_by, ": ",
+           paste(unmatched, collapse = ", "), call. = FALSE)
+    }
+    cells <- cells[groups %in% highlight]
+  }
+  if (!length(cells)) {
+    stop("No UMAP cells selected for this feature.", call. = FALSE)
+  }
+
+  points$feature_value <- NA_real_
+  if (is.null(assay) && feature %in% names(meta)) {
+    values <- meta[cells, feature, drop = TRUE]
+    if (!is.numeric(values) || !is.null(dim(values))) {
+      stop("Metadata feature must be a numeric column: ", feature, call. = FALSE)
+    }
+    points[cells, "feature_value"] <- values
+  } else {
+    if (is.null(assay)) assay <- SeuratObject::DefaultAssay(seu)
+    if (!is.character(assay) || length(assay) != 1L ||
+        !assay %in% SeuratObject::Assays(seu)) {
+      stop("assay must name an existing assay in seu.", call. = FALSE)
+    }
+    expression_assay <- seu[[assay]]
+    if (!feature %in% rownames(expression_assay)) {
+      stop("Gene not found in assay '", assay, "': ", feature, call. = FALSE)
+    }
+    assay_cells <- intersect(cells, colnames(expression_assay))
+    if (length(assay_cells)) {
+      expression <- SeuratObject::FetchData(
+        expression_assay, vars = feature, cells = assay_cells, layer = layer, clean = FALSE
+      )
+      points[rownames(expression), "feature_value"] <- expression[[feature]]
+    }
+  }
+
+  colored <- is.finite(points$feature_value) & points$feature_value > min_cutoff
+  color_order <- which(colored)
+  color_order <- color_order[order(points$feature_value[color_order], method = "radix")]
+
+  centers <- umap$centers
+  centers$cell_type <- .seurat_cluster_labels(centers$cell_type)
+  highlight_label <- if (!is.null(highlight)) {
+    paste(.seurat_cluster_labels(highlight), collapse = ", ")
+  }
+  counts <- format(c(sum(colored), length(cells)), big.mark = ",", scientific = FALSE, trim = TRUE)
+  n_label <- paste(counts, collapse = " / ")
+  title <- paste(c(feature, highlight_label, paste0("n = ", n_label)), collapse = " \u00b7 ")
+
+  ggplot2::ggplot(points, ggplot2::aes(.data$x, .data$y)) +
+    ggrastr::geom_point_rast(
+      data = points[!colored, , drop = FALSE], color = "grey85",
+      size = pt.size, alpha = alpha, raster.dpi = 360, dev = "ragg"
+    ) +
+    ggrastr::geom_point_rast(
+      data = points[color_order, , drop = FALSE], ggplot2::aes(color = .data$feature_value),
+      size = pt.size, alpha = alpha, raster.dpi = 360, dev = "ragg"
+    ) +
+    .seurat_umap_labels(centers) +
+    ggplot2::scale_color_gradientn(name = feature, colours = colors) +
+    ggplot2::labs(title = title, x = "UMAP 1", y = "UMAP 2") +
+    ggplot2::coord_equal() +
+    ggplot2::theme_classic(base_size = 12)
+}
+
+
+.seurat_cluster_labels <- function(x) {
+  sub("^([0-9]+)$", "C\\1", as.character(x))
+}
+
+
+.seurat_umap_data <- function(seu, reduction, group_by, pt.size, alpha, shuffle = FALSE, seed = 1L) {
   if (!inherits(seu, "Seurat")) {
     stop("seu must be a Seurat object.", call. = FALSE)
+  }
+  if (!is.numeric(pt.size) || length(pt.size) != 1L ||
+      !is.finite(pt.size) || pt.size < 0) {
+    stop("pt.size must be one finite non-negative number.", call. = FALSE)
+  }
+  if (!is.numeric(alpha) || length(alpha) != 1L ||
+      !is.finite(alpha) || alpha < 0 || alpha > 1) {
+    stop("alpha must be one number between 0 and 1.", call. = FALSE)
+  }
+  if (!is.logical(shuffle) || length(shuffle) != 1L || is.na(shuffle)) {
+    stop("shuffle must be TRUE or FALSE.", call. = FALSE)
   }
   if (!is.character(reduction) || length(reduction) != 1L ||
       !reduction %in% SeuratObject::Reductions(seu)) {
@@ -41,27 +221,24 @@ plot_seurat_umap <- function(seu, reduction = "umap", group_by = "seurat_cluster
     dplyr::summarise(
       x = stats::median(.data$x), y = stats::median(.data$y), .groups = "drop"
     )
-  n_groups <- nlevels(points$cell_type)
-  colors <- if (n_groups <= length(mycol)) {
-    mycol[seq_len(n_groups)]
-  } else {
-    grDevices::colorRampPalette(mycol)(n_groups)
+  if (shuffle) {
+    if (!is.numeric(seed) || length(seed) != 1L || !is.finite(seed) ||
+        seed != trunc(seed) || abs(seed) > .Machine$integer.max) {
+      stop("seed must be one integer when shuffle is TRUE.", call. = FALSE)
+    }
+    draw_order <- withr::with_seed(seed, sample.int(nrow(points)))
+    points <- points[draw_order, , drop = FALSE]
   }
 
-  ggplot2::ggplot(points, ggplot2::aes(.data$x, .data$y)) +
-    ggrastr::geom_point_rast(
-      ggplot2::aes(color = .data$cell_type),
-      size = 0.27, raster.dpi = 360, dev = "ragg"
-    ) +
-    ggplot2::geom_label(
-      data = centers, ggplot2::aes(label = .data$cell_type),
-      color = "black", fill = "white", linewidth = 0, size = 3, alpha = 0.8
-    ) +
-    ggplot2::scale_color_manual(name = group_by, values = colors, na.value = "grey75") +
-    ggplot2::guides(color = ggplot2::guide_legend(override.aes = list(size = 3))) +
-    ggplot2::labs(x = "UMAP 1", y = "UMAP 2") +
-    ggplot2::coord_equal() +
-    ggplot2::theme_classic(base_size = 12)
+  list(points = points, centers = centers, metadata = meta)
+}
+
+
+.seurat_umap_labels <- function(centers) {
+  ggplot2::geom_label(
+    data = centers, ggplot2::aes(label = .data$cell_type),
+    color = "black", fill = "white", linewidth = 0, size = 3, alpha = 0.8
+  )
 }
 
 

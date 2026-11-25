@@ -4,7 +4,15 @@
 \alias{plot_seurat_umap}
 \title{Plot a Seurat UMAP by a metadata column}
 \usage{
-plot_seurat_umap(seu, reduction = "umap", group_by = "seurat_clusters")
+plot_seurat_umap(
+  seu,
+  reduction = "umap",
+  group_by = "seurat_clusters",
+  pt.size = 0.27,
+  alpha = 1,
+  shuffle = FALSE,
+  seed = 1L
+)
 }
 \arguments{
 \item{seu}{A Seurat object containing a UMAP reduction.}
@@ -12,6 +20,16 @@ plot_seurat_umap(seu, reduction = "umap", group_by = "seurat_clusters")
 \item{reduction}{Name of the reduction. Its first two dimensions are used.}
 
 \item{group_by}{Metadata column used to color and label cells.}
+
+\item{pt.size}{Non-negative size of the cell points.}
+
+\item{alpha}{Cell-point opacity, from \code{0} (transparent) to \code{1} (opaque).}
+
+\item{shuffle}{Logical; randomize the drawing order of cells to reduce
+systematic overlap from the original cell order.}
+
+\item{seed}{Integer seed used when \code{shuffle = TRUE} to reproduce the drawing
+order without changing the caller's random-number state.}
 }
 \value{
 A \link[ggplot2:ggplot]{ggplot2::ggplot} object with rasterized cell points.
