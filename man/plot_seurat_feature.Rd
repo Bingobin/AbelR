@@ -16,7 +16,8 @@ plot_seurat_feature(
   colors = c("#4B0C6B", "#AE2191", "#F37B45", "#FCE451"),
   pt.size = 0.27,
   alpha = 1,
-  min_cutoff = 0
+  min_cutoff = 0,
+  intensity = FALSE
 )
 }
 \arguments{
@@ -47,7 +48,12 @@ for a gene. Set explicitly to read a gene that shares a metadata name.}
 \item{alpha}{Cell-point opacity, from \code{0} (transparent) to \code{1} (opaque).}
 
 \item{min_cutoff}{Finite lower threshold for coloring cells. Only finite
-feature values strictly greater than the threshold are colored.}
+original feature values strictly greater than the threshold are colored.}
+
+\item{intensity}{Logical; use a color scale from 0 to 1. The cap is the
+97th percentile of finite positive values across the full UMAP, with a
+minimum of 1. Intensity is \code{pmin(sqrt(pmax(value, 0) / cap), 1)}.
+For genes, use \code{layer = "counts"} to compute this from raw counts.}
 }
 \value{
 A \link[ggplot2:ggplot]{ggplot2::ggplot} object with rasterized cell points.

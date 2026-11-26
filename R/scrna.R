@@ -14,6 +14,10 @@
 #'   systematic overlap from the original cell order.
 #' @param seed Integer seed used when `shuffle = TRUE` to reproduce the drawing
 #'   order without changing the caller's random-number state.
+#' @param colors Optional character vector of group colors. Named vectors
+#'   match group labels, and unnamed vectors follow the group factor levels.
+#'   Supply a color for every plotted group. Use `NULL` for the default AbelR
+#'   palette (`mycol`).
 #'
 #' @return A [ggplot2::ggplot] object with rasterized cell points.
 #' @export
@@ -24,14 +28,37 @@ plot_seurat_umap <- function(
   pt.size = 0.27,
   alpha = 1,
   shuffle = FALSE,
-  seed = 1L
+  seed = 1L,
+  colors = NULL
 ) {
   umap <- .seurat_umap_data(seu, reduction, group_by, pt.size, alpha, shuffle, seed)
-  n_groups <- nlevels(umap$points$cell_type)
-  colors <- if (n_groups <= length(mycol)) {
-    mycol[seq_len(n_groups)]
+  groups <- levels(umap$points$cell_type)
+  if (is.null(colors)) {
+    colors <- if (length(groups) <= length(mycol)) {
+      mycol[seq_along(groups)]
+    } else {
+      grDevices::colorRampPalette(mycol)(length(groups))
+    }
   } else {
-    grDevices::colorRampPalette(mycol)(n_groups)
+    if (!is.character(colors) || !length(colors) || anyNA(colors) ||
+        inherits(try(grDevices::col2rgb(colors), silent = TRUE), "try-error")) {
+      stop("colors must be a character vector of valid R colors.", call. = FALSE)
+    }
+    if (is.null(names(colors))) {
+      if (length(colors) < length(groups)) {
+        stop("colors must supply at least one color per group.", call. = FALSE)
+      }
+      colors <- colors[seq_along(groups)]
+    } else {
+      if (anyNA(names(colors)) || any(!nzchar(names(colors))) || anyDuplicated(names(colors))) {
+        stop("Named colors must have unique, non-empty group names.", call. = FALSE)
+      }
+      missing_groups <- setdiff(groups, names(colors))
+      if (length(missing_groups)) {
+        stop("No colors supplied for groups: ", paste(missing_groups, collapse = ", "), call. = FALSE)
+      }
+      colors <- colors[groups]
+    }
   }
 
   ggplot2::ggplot(umap$points, ggplot2::aes(.data$x, .data$y)) +
@@ -71,7 +98,11 @@ plot_seurat_umap <- function(
 #' @param layer Expression layer used for a gene, such as `"data"` or `"counts"`.
 #' @param colors Colors for the continuous gradient, from low to high.
 #' @param min_cutoff Finite lower threshold for coloring cells. Only finite
-#'   feature values strictly greater than the threshold are colored.
+#'   original feature values strictly greater than the threshold are colored.
+#' @param intensity Logical; use a color scale from 0 to 1. The cap is the
+#'   97th percentile of finite positive values across the full UMAP, with a
+#'   minimum of 1. Intensity is `pmin(sqrt(pmax(value, 0) / cap), 1)`.
+#'   For genes, use `layer = "counts"` to compute this from raw counts.
 #'
 #' @return A [ggplot2::ggplot] object with rasterized cell points.
 #' @export
@@ -87,14 +118,18 @@ plot_seurat_feature <- function(
   colors = c("#4B0C6B", "#AE2191", "#F37B45", "#FCE451"),
   pt.size = 0.27,
   alpha = 1,
-  min_cutoff = 0
+  min_cutoff = 0,
+  intensity = FALSE
 ) {
   if (!is.character(feature) || length(feature) != 1L ||
-      is.na(feature) || !nzchar(feature)) {
+    is.na(feature) || !nzchar(feature)) {
     stop("feature must be one gene or metadata column name.", call. = FALSE)
   }
   if (!is.numeric(min_cutoff) || length(min_cutoff) != 1L || !is.finite(min_cutoff)) {
     stop("min_cutoff must be one finite number.", call. = FALSE)
+  }
+  if (!is.logical(intensity) || length(intensity) != 1L || is.na(intensity)) {
+    stop("intensity must be TRUE or FALSE.", call. = FALSE)
   }
   umap <- .seurat_umap_data(seu, reduction, group_by, pt.size, alpha)
   points <- umap$points
@@ -103,7 +138,7 @@ plot_seurat_feature <- function(
 
   if (!is.null(highlight)) {
     if (!is.character(highlight_by) || length(highlight_by) != 1L ||
-        !highlight_by %in% names(meta)) {
+      !highlight_by %in% names(meta)) {
       stop("highlight_by must name an existing metadata column in seu.", call. = FALSE)
     }
     highlight <- unique(as.character(highlight))
@@ -111,7 +146,9 @@ plot_seurat_feature <- function(
     unmatched <- setdiff(highlight, groups[!is.na(groups)])
     if (length(unmatched) > 0L) {
       stop("Groups not found in the UMAP for ", highlight_by, ": ",
-           paste(unmatched, collapse = ", "), call. = FALSE)
+        paste(unmatched, collapse = ", "),
+        call. = FALSE
+      )
     }
     cells <- cells[groups %in% highlight]
   }
@@ -119,30 +156,48 @@ plot_seurat_feature <- function(
     stop("No UMAP cells selected for this feature.", call. = FALSE)
   }
 
+  value_cells <- if (intensity) rownames(points) else cells
   points$feature_value <- NA_real_
   if (is.null(assay) && feature %in% names(meta)) {
-    values <- meta[cells, feature, drop = TRUE]
+    values <- meta[value_cells, feature, drop = TRUE]
     if (!is.numeric(values) || !is.null(dim(values))) {
       stop("Metadata feature must be a numeric column: ", feature, call. = FALSE)
     }
-    points[cells, "feature_value"] <- values
+    points[value_cells, "feature_value"] <- values
   } else {
     if (is.null(assay)) assay <- SeuratObject::DefaultAssay(seu)
     if (!is.character(assay) || length(assay) != 1L ||
-        !assay %in% SeuratObject::Assays(seu)) {
+      !assay %in% SeuratObject::Assays(seu)) {
       stop("assay must name an existing assay in seu.", call. = FALSE)
     }
     expression_assay <- seu[[assay]]
     if (!feature %in% rownames(expression_assay)) {
       stop("Gene not found in assay '", assay, "': ", feature, call. = FALSE)
     }
-    assay_cells <- intersect(cells, colnames(expression_assay))
+    assay_cells <- intersect(value_cells, colnames(expression_assay))
     if (length(assay_cells)) {
       expression <- SeuratObject::FetchData(
-        expression_assay, vars = feature, cells = assay_cells, layer = layer, clean = FALSE
+        expression_assay,
+        vars = feature, cells = assay_cells, layer = layer, clean = FALSE
       )
       points[rownames(expression), "feature_value"] <- expression[[feature]]
     }
+  }
+
+  color_column <- "feature_value"
+  if (intensity) {
+    values <- points$feature_value
+    finite <- is.finite(values)
+    positive <- values[finite & values > 0]
+    cap <- if (length(positive)) {
+      max(1, stats::quantile(positive, probs = 0.97, names = FALSE))
+    } else {
+      1
+    }
+    points$intensity <- NA_real_
+    points$intensity[finite] <- pmin(sqrt(pmax(values[finite], 0) / cap), 1)
+    points[!rownames(points) %in% cells, c("feature_value", "intensity")] <- NA_real_
+    color_column <- "intensity"
   }
 
   colored <- is.finite(points$feature_value) & points$feature_value > min_cutoff
@@ -164,11 +219,14 @@ plot_seurat_feature <- function(
       size = pt.size, alpha = alpha, raster.dpi = 360, dev = "ragg"
     ) +
     ggrastr::geom_point_rast(
-      data = points[color_order, , drop = FALSE], ggplot2::aes(color = .data$feature_value),
+      data = points[color_order, , drop = FALSE], ggplot2::aes(color = .data[[color_column]]),
       size = pt.size, alpha = alpha, raster.dpi = 360, dev = "ragg"
     ) +
     .seurat_umap_labels(centers) +
-    ggplot2::scale_color_gradientn(name = feature, colours = colors) +
+    ggplot2::scale_color_gradientn(
+      name = if (intensity) "Intensity" else feature,
+      colours = colors, limits = if (intensity) c(0, 1)
+    ) +
     ggplot2::labs(title = title, x = "UMAP 1", y = "UMAP 2") +
     ggplot2::coord_equal() +
     ggplot2::theme_classic(base_size = 12)
@@ -185,23 +243,23 @@ plot_seurat_feature <- function(
     stop("seu must be a Seurat object.", call. = FALSE)
   }
   if (!is.numeric(pt.size) || length(pt.size) != 1L ||
-      !is.finite(pt.size) || pt.size < 0) {
+    !is.finite(pt.size) || pt.size < 0) {
     stop("pt.size must be one finite non-negative number.", call. = FALSE)
   }
   if (!is.numeric(alpha) || length(alpha) != 1L ||
-      !is.finite(alpha) || alpha < 0 || alpha > 1) {
+    !is.finite(alpha) || alpha < 0 || alpha > 1) {
     stop("alpha must be one number between 0 and 1.", call. = FALSE)
   }
   if (!is.logical(shuffle) || length(shuffle) != 1L || is.na(shuffle)) {
     stop("shuffle must be TRUE or FALSE.", call. = FALSE)
   }
   if (!is.character(reduction) || length(reduction) != 1L ||
-      !reduction %in% SeuratObject::Reductions(seu)) {
+    !reduction %in% SeuratObject::Reductions(seu)) {
     stop("reduction must name an existing reduction in seu.", call. = FALSE)
   }
   meta <- seu[[]]
   if (!is.character(group_by) || length(group_by) != 1L ||
-      !group_by %in% colnames(meta)) {
+    !group_by %in% colnames(meta)) {
     stop("group_by must name an existing metadata column in seu.", call. = FALSE)
   }
 
@@ -223,7 +281,7 @@ plot_seurat_feature <- function(
     )
   if (shuffle) {
     if (!is.numeric(seed) || length(seed) != 1L || !is.finite(seed) ||
-        seed != trunc(seed) || abs(seed) > .Machine$integer.max) {
+      seed != trunc(seed) || abs(seed) > .Machine$integer.max) {
       stop("seed must be one integer when shuffle is TRUE.", call. = FALSE)
     }
     draw_order <- withr::with_seed(seed, sample.int(nrow(points)))
@@ -344,29 +402,26 @@ filter_seurat_qc <- function(
 #'   clusters, and UMAP coordinates.
 #' @export
 scRNA_SCT_norm <- function(
-    seu,
-    sample_col = "SampleID",
-    # SCTransform / PCA
-    var_features_n = 3000,
-    sct_method = "glmGamPoi",
-    npcs = 30,
-    
-    # Integration / graph
-    dims = 1:30,
-    k.anchor = 20,
-    k.weight = 20,
-    resolution = 0.5,
-    
-    # UMAP (影响“分得太开”的视觉表现很大)
-    umap_n_neighbors = 30,
-    umap_min_dist = 0.3,
-    umap_spread = 1.0,
-    
-    # housekeeping
-    join_layers = TRUE,
-    maxSize_GB = 35,
-    verbose = FALSE
-){
+  seu,
+  sample_col = "SampleID",
+  # SCTransform / PCA
+  var_features_n = 3000,
+  sct_method = "glmGamPoi",
+  npcs = 30,
+  # Integration / graph
+  dims = 1:30,
+  k.anchor = 20,
+  k.weight = 20,
+  resolution = 0.5,
+  # UMAP (影响“分得太开”的视觉表现很大)
+  umap_n_neighbors = 30,
+  umap_min_dist = 0.3,
+  umap_spread = 1.0,
+  # housekeeping
+  join_layers = TRUE,
+  maxSize_GB = 35,
+  verbose = FALSE
+) {
   old_max_size <- getOption("future.globals.maxSize")
   on.exit(options(future.globals.maxSize = old_max_size), add = TRUE)
   options(future.globals.maxSize = maxSize_GB * 1024^3)
@@ -379,7 +434,7 @@ scRNA_SCT_norm <- function(
     stop("sample_col not found in metadata: ", sample_col)
   }
   if (identical(sct_method, "glmGamPoi") &&
-      !requireNamespace("glmGamPoi", quietly = TRUE)) {
+    !requireNamespace("glmGamPoi", quietly = TRUE)) {
     stop("Package 'glmGamPoi' is required when sct_method = 'glmGamPoi'.")
   }
   sample_values <- factor(seu@meta.data[[sample_col]])
@@ -387,13 +442,13 @@ scRNA_SCT_norm <- function(
     stop("sample_col contains missing values: ", sample_col)
   }
   seu[[sample_col]] <- sample_values
-  
+
   # RNA layers: join then split by sample
   if (join_layers) {
     seu[["RNA"]] <- SeuratObject::JoinLayers(seu[["RNA"]])
   }
   seu[["RNA"]] <- split(seu[["RNA"]], f = sample_values)
-  
+
   # SCT
   seu <- SCTransform(
     seu,
@@ -402,12 +457,12 @@ scRNA_SCT_norm <- function(
     assay = "RNA",
     verbose = verbose
   )
-  
+
   DefaultAssay(seu) <- "SCT"
-  
+
   # PCA
   seu <- RunPCA(seu, npcs = npcs, verbose = verbose, assay = "SCT")
-  
+
   # Integration
   seu <- IntegrateLayers(
     object = seu,
@@ -420,11 +475,11 @@ scRNA_SCT_norm <- function(
     k.weight = k.weight,
     dims = dims
   )
-  
+
   # Neighbors / clusters
   seu <- FindNeighbors(seu, reduction = "integrated.dr", dims = dims, graph.name = "integrated_snn")
   seu <- FindClusters(seu, graph.name = "integrated_snn", resolution = resolution)
-  
+
   # UMAP
   seu <- RunUMAP(
     seu,
@@ -435,7 +490,7 @@ scRNA_SCT_norm <- function(
     spread = umap_spread,
     verbose = verbose
   )
-  
+
   return(seu)
 }
 
@@ -459,11 +514,11 @@ scRNA_SCT_norm <- function(
 #'   `ccolss`, per-cluster `sctype_scores`, and the complete `CL_results` table.
 #' @export
 scTYPE_annotation <- function(
-    scRNA_object,
-    assay,
-    tissue = "Immune system",
-    sctype_dir = getOption("AbelR.sctype_dir"),
-    db_file = NULL
+  scRNA_object,
+  assay,
+  tissue = "Immune system",
+  sctype_dir = getOption("AbelR.sctype_dir"),
+  db_file = NULL
 ) {
   #  scRNA_object <- pbmc.combined.sct
   #  assay <- "integrated"

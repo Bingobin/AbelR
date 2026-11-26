@@ -11,7 +11,8 @@ plot_seurat_umap(
   pt.size = 0.27,
   alpha = 1,
   shuffle = FALSE,
-  seed = 1L
+  seed = 1L,
+  colors = NULL
 )
 }
 \arguments{
@@ -30,6 +31,11 @@ systematic overlap from the original cell order.}
 
 \item{seed}{Integer seed used when \code{shuffle = TRUE} to reproduce the drawing
 order without changing the caller's random-number state.}
+
+\item{colors}{Optional character vector of group colors. Named vectors
+match group labels, and unnamed vectors follow the group factor levels.
+Supply a color for every plotted group. Use \code{NULL} for the default AbelR
+palette (\code{mycol}).}
 }
 \value{
 A \link[ggplot2:ggplot]{ggplot2::ggplot} object with rasterized cell points.
